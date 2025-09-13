@@ -11,12 +11,13 @@ import chardet
 import math
 
 class MP3ToVideoConverter:
-    def __init__(self, input_folder, output_folder, batch_size=25, arate=192, vrate=550):
+    def __init__(self, input_folder, output_folder, batch_size=25, arate=192, vrate=550, font='arial.ttf'):
         self.input_folder = Path(input_folder)
         self.output_folder = Path(output_folder)
         tempfile.tempdir=output_folder
         self.batch_size = batch_size
         self.arate=arate
+        self.font=font
         self.vrate=vrate
         self.processed_files = []
         self.to_process_files = []
@@ -137,7 +138,7 @@ class MP3ToVideoConverter:
         try:
             # Try to load a font that supports multiple languages
             try:
-                font = ImageFont.truetype("arial.ttf", font_size)
+                font = ImageFont.truetype(self.font, font_size)
             except:
                 font = ImageFont.load_default()
             
@@ -267,7 +268,8 @@ class MP3ToVideoConverter:
                     # Create regular video without lyrics
                     self.create_video_segment(metadata, bg_image_path, segment_path)
                 
-                video_segments.append(segment_path)
+                video_segments.append(f"segment_{i}.mp4")
+                print(f"File {metadata['title']} processed to segment_{i}.mp4 ")
             
             # Concatenate all video segments
             concat_file = temp_path / "concat_list.txt"
@@ -282,7 +284,7 @@ class MP3ToVideoConverter:
             ]
             
             try:
-                subprocess.run(cmd, check=True)
+                subprocess.run(cmd, check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
                 
                 # Mark files as processed
                 for metadata in metadata_list:
@@ -307,10 +309,10 @@ class MP3ToVideoConverter:
         try:
             # Try to load fonts that support multiple languages
             try:
-                title_font = ImageFont.truetype("arial.ttf", 40)
-                info_font = ImageFont.truetype("arial.ttf", 30)
-                list_font = ImageFont.truetype("arial.ttf", 20)
-                highlight_font = ImageFont.truetype("arial.ttf", 22)
+                title_font = ImageFont.truetype(self.font, 40)
+                info_font = ImageFont.truetype(self.font, 30)
+                list_font = ImageFont.truetype(self.font, 20)
+                highlight_font = ImageFont.truetype(self.font, 22)
             except:
                 # Fallback to default font
                 title_font = ImageFont.load_default()
@@ -462,6 +464,7 @@ def main():
     parser.add_argument('--batch-size', type=int, default=25, help='Number of tracks per video (adequate max value is 30, default: 25)')
     parser.add_argument('--vrate', type=int, default=550, help='Out video bitrate in kbits (default: 550)')
     parser.add_argument('--arate', type=int, default=192, help='Audio bitrate in kbits out video (default: 192)')
+    parser.add_argument('--font', default='arial.ttf', help='Font file: default = arial.ttf')
     args = parser.parse_args()
     
     # Check if ffmpeg is available
@@ -472,7 +475,7 @@ def main():
         return
     
     # Process the files
-    converter = MP3ToVideoConverter(args.input_folder, args.output_folder, args.batch_size)
+    converter = MP3ToVideoConverter(args.input_folder, args.output_folder, args.batch_size, args.arate, args.vrate, args.font)
     converter.process_all()
 
 if __name__ == "__main__":
