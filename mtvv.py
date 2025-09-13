@@ -23,7 +23,7 @@ class MP3ToVideoConverter:
         self.shuffle=shuffle
         self.processed_files = []
         self.to_process_files = []
-        
+        self.wavecolor="0x9400D3"
         # Create output folder if it doesn't exist
         self.output_folder.mkdir(exist_ok=True)
         
@@ -130,6 +130,9 @@ class MP3ToVideoConverter:
             
             # Resize if needed
             img = Image.open(output_path)
+            resized_img = img.resize((1, 1), Image.BICUBIC)
+            r, g, b = resized_img.convert('RGB').getpixel((0,0))
+            self.wavecolor = f"0x{r:02x}{g:02x}{b:02x}"
             img = img.resize(size, Image.LANCZOS)
             img.save(output_path)
             return True
@@ -382,14 +385,14 @@ class MP3ToVideoConverter:
         """Create a video segment for a single track without lyrics"""
         duration = metadata['duration']
         filter_complex = (
-            f"aformat=channel_layouts=mono,showwaves=mode=cline:s=480X480:colors=Violet[auvis];"
+            f"showwaves=mode=cline:s=480X480:colors={self.wavecolor}[auvis];"
             f"[0:v][auvis]overlay=x=720:y=600[outv]"
         )
         cmd = [
             'ffmpeg', '-loop', '1', '-i', str(image_path), '-i', metadata['path'],
             '-filter_complex', filter_complex,'-map', '[outv]', '-map', '1:a',
-            '-c:v', 'libx264','-preset','veryfast',  '-t', str(duration), '-pix_fmt', 'yuv420p',
-            '-c:a', 'aac', '-strict', 'experimental', '-b:a', str(self.arate)+'k','-b:v', str(self.vrate)+'k',
+            '-c:v', 'libx264','-preset','veryfast',  '-t', str(duration), '-pix_fmt', 'yuv420p','-threads','0',
+            '-c:a', 'aac', '-strict', 'experimental','-threads','0','-b:a', str(self.arate)+'k','-b:v', str(self.vrate)+'k',
             '-shortest', str(output_path), '-y'
         ]
         
@@ -411,7 +414,7 @@ class MP3ToVideoConverter:
         # Create a complex filter for scrolling lyrics
         filter_complex = (
             f"[1:v]scale=600:-1,format=rgba [lyrics]; "
-            f"aformat=channel_layouts=mono,showwaves=mode=cline:s=480X480:colors=Violet[auvis];"
+            f"showwaves=mode=cline:s=480X480:colors={self.wavecolor}[auvis];"
             f"[0:v][lyrics]overlay=x=1270:y='if(gte(t,0), (H)-{scroll_speed}*t, 0)':shortest=1[lurv];"
             f"[lurv][auvis]overlay=x=720:y=600[outv]"
         )
@@ -422,8 +425,8 @@ class MP3ToVideoConverter:
             '-i', metadata['path'],
             '-filter_complex', filter_complex,
             '-map', '[outv]', '-map', '2:a',
-            '-c:v', 'libx264','-preset','veryfast', '-t', str(duration), '-pix_fmt', 'yuv420p',
-            '-c:a', 'aac', '-strict', 'experimental', '-b:a', str(self.arate)+'k','-b:v', str(self.vrate)+'k',
+            '-c:v', 'libx264','-preset','veryfast', '-t', str(duration), '-pix_fmt', 'yuv420p','-threads','0',
+            '-c:a', 'aac', '-strict', 'experimental','-threads','0', '-b:a', str(self.arate)+'k','-b:v', str(self.vrate)+'k',
             '-shortest', str(output_path), '-y'
         ]
         
