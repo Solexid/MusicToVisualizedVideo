@@ -9,9 +9,10 @@ import subprocess
 import tempfile
 import chardet
 import math
+import random
 
 class MP3ToVideoConverter:
-    def __init__(self, input_folder, output_folder, batch_size=25, arate=192, vrate=550, font='arial.ttf'):
+    def __init__(self, input_folder, output_folder, batch_size=25, arate=192, vrate=550, font='arial.ttf',shuffle=0):
         self.input_folder = Path(input_folder)
         self.output_folder = Path(output_folder)
         tempfile.tempdir=output_folder
@@ -19,6 +20,7 @@ class MP3ToVideoConverter:
         self.arate=arate
         self.font=font
         self.vrate=vrate
+        self.shuffle=shuffle
         self.processed_files = []
         self.to_process_files = []
         
@@ -34,6 +36,8 @@ class MP3ToVideoConverter:
     def get_mp3_files(self):
         """Get all MP3 files from input folder that haven't been processed yet"""
         all_mp3s = list(self.input_folder.glob("*.mp3"))
+        if self.shuffle != 0 :
+            random.shuffle(all_mp3s)
         self.to_process_files = [str(f) for f in all_mp3s if str(f) not in self.processed_files]
         return self.to_process_files
     
@@ -465,6 +469,7 @@ def main():
     parser.add_argument('--vrate', type=int, default=550, help='Out video bitrate in kbits (default: 550)')
     parser.add_argument('--arate', type=int, default=192, help='Audio bitrate in kbits out video (default: 192)')
     parser.add_argument('--font', default='arial.ttf', help='Font file: default = arial.ttf')
+    parser.add_argument('--shuffle', type=int, default=0, help='Set to 1 to shuffle input list.')
     args = parser.parse_args()
     
     # Check if ffmpeg is available
@@ -475,7 +480,7 @@ def main():
         return
     
     # Process the files
-    converter = MP3ToVideoConverter(args.input_folder, args.output_folder, args.batch_size, args.arate, args.vrate, args.font)
+    converter = MP3ToVideoConverter(args.input_folder, args.output_folder, args.batch_size, args.arate, args.vrate, args.font, args.shuffle)
     converter.process_all()
 
 if __name__ == "__main__":
