@@ -291,8 +291,7 @@ class MP3ToVideoConverter:
             ]
             
             try:
-                subprocess.run(cmd, check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-                
+                result = subprocess.run(cmd, check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
                 # Mark files as processed
                 for metadata in metadata_list:
                     self.processed_files.append(metadata['path'])
@@ -304,6 +303,8 @@ class MP3ToVideoConverter:
                 return True
             except subprocess.CalledProcessError as e:
                 print(f"Error creating video: {e}")
+                print(f"FFmpeg command: {' '.join(cmd)}")
+                print(f"FFmpeg stderr: {e.stderr}")
                 return False
     
     def create_background_image(self, metadata, output_path, album_art_path=None, track_list_file=None, current_track_index=0):
@@ -385,7 +386,7 @@ class MP3ToVideoConverter:
         """Create a video segment for a single track without lyrics"""
         duration = metadata['duration']
         filter_complex = (
-            f"showwaves=mode=cline:s=480X480:colors={self.wavecolor}[auvis];"
+            f"[1:a]showwaves=mode=cline:s=480X480:colors={self.wavecolor}[auvis];"
             f"[0:v][auvis]overlay=x=720:y=600[outv]"
         )
         cmd = [
@@ -397,10 +398,12 @@ class MP3ToVideoConverter:
         ]
         
         try:
-            subprocess.run(cmd, check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            result = subprocess.run(cmd, check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
             return True
         except subprocess.CalledProcessError as e:
             print(f"Error creating video segment: {e}")
+            print(f"FFmpeg command: {' '.join(cmd)}")
+            print(f"FFmpeg stderr: {e.stderr}")
             return False
     
     def create_video_with_scrolling_lyrics(self, metadata, bg_image_path, lyrics_image_path, lyrics_height, output_path):
@@ -413,8 +416,8 @@ class MP3ToVideoConverter:
         
         # Create a complex filter for scrolling lyrics
         filter_complex = (
+            f"[2:a]showwaves=mode=cline:s=480X480:colors={self.wavecolor}[auvis];"
             f"[1:v]scale=600:-1,format=rgba [lyrics]; "
-            f"showwaves=mode=cline:s=480X480:colors={self.wavecolor}[auvis];"
             f"[0:v][lyrics]overlay=x=1270:y='if(gte(t,0), (H)-{scroll_speed}*t, 0)':shortest=1[lurv];"
             f"[lurv][auvis]overlay=x=720:y=600[outv]"
         )
@@ -431,10 +434,12 @@ class MP3ToVideoConverter:
         ]
         
         try:
-            subprocess.run(cmd, check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            result = subprocess.run(cmd, check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
             return True
         except subprocess.CalledProcessError as e:
             print(f"Error creating video with scrolling lyrics: {e}")
+            print(f"FFmpeg command: {' '.join(cmd)}")
+            print(f"FFmpeg stderr: {e.stderr}")
             # Fallback to regular video without lyrics
             return self.create_video_segment(metadata, bg_image_path, output_path)
     
@@ -451,7 +456,8 @@ class MP3ToVideoConverter:
         # Process in batches
         for i in range(0, len(mp3_files), self.batch_size):
             batch = mp3_files[i:i + self.batch_size]
-            batch_index = i // self.batch_size + 1
+            existing_batches = len(self.processed_files) // self.batch_size
+            batch_index = (i // self.batch_size) + 1 + existing_batches
             
             print(f"Processing batch {batch_index} with {len(batch)} tracks...")
             
