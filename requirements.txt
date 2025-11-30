@@ -1,3 +1,4 @@
 chardet==5.2.0
 mutagen==1.47.0
 Pillow==11.3.0
+tqdm==4.66.1

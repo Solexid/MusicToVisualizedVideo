@@ -10,6 +10,7 @@ import tempfile
 import chardet
 import math
 import random
+from tqdm import tqdm
 
 class MP3ToVideoConverter:
     def __init__(self, input_folder, output_folder, batch_size=25, arate=192, vrate=550, font='arial.ttf',shuffle=0):
@@ -234,7 +235,7 @@ class MP3ToVideoConverter:
             
             # Process each track in the batch
             video_segments = []
-            for i, metadata in enumerate(metadata_list):
+            for i, metadata in enumerate(tqdm(metadata_list, desc=f"Processing batch {batch_index}", unit="track")):
                 # Create album art image if available
                 album_art_path = None
                 if metadata['album_art']:
@@ -276,7 +277,7 @@ class MP3ToVideoConverter:
                     self.create_video_segment(metadata, bg_image_path, segment_path)
                 
                 video_segments.append(f"segment_{i}.mp4")
-                print(f"File {metadata['title']} processed to segment_{i}.mp4 ")
+                print(f" File {metadata['title']} processed to segment_{i}.mp4 ")
             
             # Concatenate all video segments
             concat_file = temp_path / "concat_list.txt"
