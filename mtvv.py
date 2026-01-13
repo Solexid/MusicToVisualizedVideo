@@ -387,13 +387,15 @@ class MP3ToVideoConverter:
         """Create a video segment for a single track without lyrics"""
         duration = metadata['duration']
         filter_complex = (
-            f"[1:a]showwaves=mode=cline:s=480X480:colors={self.wavecolor}[auvis];"
+            f"[1:a]showwaves=mode=cline:s=480X480:colors={self.wavecolor}|0xFFFFFF:split_channels=1,"
+            f"geq='p(mod(W/PI*(PI+atan2(H/2-Y,X-W/2)),W), H-2*hypot(H/2-Y,X-W/2))':"
+            f"a='alpha(mod(W/PI*(PI+atan2(H/2-Y,X-W/2)),W), H-2*hypot(H/2-Y,X-W/2))'[auvis];"
             f"[0:v][auvis]overlay=x=720:y=600[outv]"
         )
         cmd = [
             'ffmpeg', '-loop', '1', '-i', str(image_path), '-i', metadata['path'],
             '-filter_complex', filter_complex,'-map', '[outv]', '-map', '1:a',
-            '-c:v', 'libx264','-preset','veryfast',  '-t', str(duration), '-pix_fmt', 'yuv420p','-threads','0',
+            '-c:v', 'libx264','-preset','fast',  '-t', str(duration), '-pix_fmt', 'yuv420p','-threads','0',
             '-c:a', 'aac', '-strict', 'experimental','-threads','0','-b:a', str(self.arate)+'k','-b:v', str(self.vrate)+'k',
             '-shortest', str(output_path), '-y'
         ]
@@ -417,7 +419,9 @@ class MP3ToVideoConverter:
         
         # Create a complex filter for scrolling lyrics
         filter_complex = (
-            f"[2:a]showwaves=mode=cline:s=480X480:colors={self.wavecolor}[auvis];"
+            f"[2:a]showwaves=mode=cline:s=480X480:colors={self.wavecolor}|0xFFFFFF:split_channels=1,"
+            f"geq='p(mod(W/PI*(PI+atan2(H/2-Y,X-W/2)),W), H-2*hypot(H/2-Y,X-W/2))':"
+            f"a='alpha(mod(W/PI*(PI+atan2(H/2-Y,X-W/2)),W), H-2*hypot(H/2-Y,X-W/2))'[auvis];"
             f"[1:v]scale=600:-1,format=rgba [lyrics]; "
             f"[0:v][lyrics]overlay=x=1270:y='if(gte(t,0), (H)-{scroll_speed}*t, 0)':shortest=1[lurv];"
             f"[lurv][auvis]overlay=x=720:y=600[outv]"
@@ -429,7 +433,7 @@ class MP3ToVideoConverter:
             '-i', metadata['path'],
             '-filter_complex', filter_complex,
             '-map', '[outv]', '-map', '2:a',
-            '-c:v', 'libx264','-preset','veryfast', '-t', str(duration), '-pix_fmt', 'yuv420p','-threads','0',
+            '-c:v', 'libx264','-preset','fast', '-t', str(duration), '-pix_fmt', 'yuv420p','-threads','0',
             '-c:a', 'aac', '-strict', 'experimental','-threads','0', '-b:a', str(self.arate)+'k','-b:v', str(self.vrate)+'k',
             '-shortest', str(output_path), '-y'
         ]
@@ -458,7 +462,7 @@ class MP3ToVideoConverter:
         for i in range(0, len(mp3_files), self.batch_size):
             batch = mp3_files[i:i + self.batch_size]
             existing_batches = len(self.processed_files) // self.batch_size
-            batch_index =  1 + existing_batches
+            batch_index = existing_batches
             
             print(f"Processing batch {batch_index} with {len(batch)} tracks...")
             
