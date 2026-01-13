@@ -458,7 +458,7 @@ class MP3ToVideoConverter:
         for i in range(0, len(mp3_files), self.batch_size):
             batch = mp3_files[i:i + self.batch_size]
             existing_batches = len(self.processed_files) // self.batch_size
-            batch_index = (i // self.batch_size) + 1 + existing_batches
+            batch_index =  1 + existing_batches
             
             print(f"Processing batch {batch_index} with {len(batch)} tracks...")
             
