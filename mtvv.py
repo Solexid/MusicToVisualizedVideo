@@ -13,31 +13,33 @@ import random
 from tqdm import tqdm
 
 class MP3ToVideoConverter:
-    def __init__(self, input_folder, output_folder, batch_size=25, arate=192, vrate=550, font='arial.ttf',shuffle=0):
+    def __init__(self, input_folder, output_folder, batch_size=25, arate=192, vrate=550, font='arial.ttf', shuffle=0, frate=30,codec = 'libx264'):
         self.input_folder = Path(input_folder)
         self.output_folder = Path(output_folder)
-        tempfile.tempdir=output_folder
+        tempfile.tempdir = output_folder
         self.batch_size = batch_size
-        self.arate=arate
-        self.font=font
-        self.vrate=vrate
-        self.shuffle=shuffle
+        self.arate = arate
+        self.font = font
+        self.vrate = vrate
+        self.shuffle = shuffle
+        self.frate = frate
+        self.codec = codec
         self.processed_files = []
         self.to_process_files = []
-        self.wavecolor="0x9400D3"
+        self.wavecolor = "0x9400D3"
         # Create output folder if it doesn't exist
         self.output_folder.mkdir(exist_ok=True)
         
         # Load processed files list if exists
         self.processed_list_file = self.output_folder / "processed_files.json"
         if self.processed_list_file.exists():
-            with open(self.processed_list_file, 'r') as f:
+            with open(self.processed_list_file, 'r', encoding='utf-8') as f:
                 self.processed_files = json.load(f)
     
     def get_mp3_files(self):
         """Get all MP3 files from input folder that haven't been processed yet"""
         all_mp3s = list(self.input_folder.glob("*.mp3"))
-        if self.shuffle != 0 :
+        if self.shuffle != 0:
             random.shuffle(all_mp3s)
         self.to_process_files = [str(f) for f in all_mp3s if str(f) not in self.processed_files]
         return self.to_process_files
@@ -46,7 +48,10 @@ class MP3ToVideoConverter:
         """Extract ID3 tag value safely"""
         try:
             if tag_name in tags:
-                return str(tags[tag_name])
+                value = tags[tag_name]
+                if isinstance(value, list) and len(value) > 0:
+                    value = value[0]
+                return str(value)
         except:
             pass
         return default
@@ -55,7 +60,9 @@ class MP3ToVideoConverter:
         """Find standard lyrics tag (USLT)"""
         for tag in tags.keys():
             if tag.startswith("USLT"):
-                return str(tags[tag])
+                value = tags[tag]
+                if hasattr(value, 'text'):
+                    return str(value.text)
         return None
     
     def detect_encoding(self, text):
@@ -67,7 +74,7 @@ class MP3ToVideoConverter:
             # Try UTF-8 first
             decoded = text.decode('utf-8')
             return decoded, 'utf-8'
-        except UnicodeDecodeError:
+        except (UnicodeDecodeError, AttributeError):
             try:
                 # Try to detect encoding
                 result = chardet.detect(text)
@@ -208,6 +215,29 @@ class MP3ToVideoConverter:
             print(f"Error creating lyrics image: {e}")
             return 0
     
+    def run_ffmpeg_command(self, cmd):
+        """Run FFmpeg command with proper encoding handling"""
+        try:
+            # Use a custom environment to ensure UTF-8 encoding
+            env = os.environ.copy()
+            env['PYTHONIOENCODING'] = 'utf-8'
+            
+            # Run the command and capture output with proper encoding
+            result = subprocess.run(
+                cmd, 
+                check=True, 
+                stdout=subprocess.PIPE, 
+                stderr=subprocess.PIPE,
+                encoding='utf-8',  # Force UTF-8 encoding
+                errors='ignore',   # Ignore encoding errors
+                env=env
+            )
+            return result
+        except subprocess.CalledProcessError as e:
+            print(f"FFmpeg command failed: {' '.join(cmd)}")
+            print(f"FFmpeg stderr: {e.stderr}")
+            raise
+    
     def create_video_for_batch(self, batch_files, batch_index):
         """Create a video for a batch of MP3 files"""
         if not batch_files:
@@ -292,20 +322,18 @@ class MP3ToVideoConverter:
             ]
             
             try:
-                result = subprocess.run(cmd, check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+                self.run_ffmpeg_command(cmd)
                 # Mark files as processed
                 for metadata in metadata_list:
                     self.processed_files.append(metadata['path'])
                 
                 # Update processed files list
                 with open(self.processed_list_file, 'w', encoding='utf-8') as f:
-                    json.dump(self.processed_files, f)
+                    json.dump(self.processed_files, f, ensure_ascii=False, indent=2)
                 
                 return True
-            except subprocess.CalledProcessError as e:
+            except Exception as e:
                 print(f"Error creating video: {e}")
-                print(f"FFmpeg command: {' '.join(cmd)}")
-                print(f"FFmpeg stderr: {e.stderr}")
                 return False
     
     def create_background_image(self, metadata, output_path, album_art_path=None, track_list_file=None, current_track_index=0):
@@ -329,10 +357,8 @@ class MP3ToVideoConverter:
                 list_font = ImageFont.load_default()
                 highlight_font = ImageFont.load_default()
             
-           
-            
             # Add track list on the left
-            if track_list_file and os.path.exists(track_list_file):
+            if track_list_file and track_list_file.exists():
                 with open(track_list_file, 'r', encoding='utf-8') as f:
                     tracks = f.readlines()
                 
@@ -346,8 +372,8 @@ class MP3ToVideoConverter:
                         draw.text((list_x, list_y), track.strip(), font=list_font, fill=(150, 150, 150))
                     list_y += 30
             
-             # Add album art if available
-            if album_art_path and os.path.exists(album_art_path):
+            # Add album art if available
+            if album_art_path and album_art_path.exists():
                 album_art = Image.open(album_art_path)
                 art_size = 400
                 album_art = album_art.resize((art_size, art_size), Image.LANCZOS)
@@ -356,22 +382,29 @@ class MP3ToVideoConverter:
                 image.paste(album_art, (art_x, art_y))
             
             # Add track info below album art
-            title_text = metadata['title']
-            artist_text = f"{metadata['album_artist']} - {metadata['album']}"
+            title_text = metadata['title'][:50]  # Limit length
+            artist_text = f"{metadata['album_artist']} - {metadata['album']}"[:70]  # Limit length
             
-            title_bbox = draw.textbbox((0, 0), title_text, font=title_font)
-            title_width = title_bbox[2] - title_bbox[0]
+            # Get text bounding boxes
+            if hasattr(draw, 'textbbox'):
+                title_bbox = draw.textbbox((0, 0), title_text, font=title_font)
+                artist_bbox = draw.textbbox((0, 0), artist_text, font=info_font)
+                title_width = title_bbox[2] - title_bbox[0]
+                artist_width = artist_bbox[2] - artist_bbox[0]
+            else:
+                title_width = draw.textlength(title_text, font=title_font)
+                artist_width = draw.textlength(artist_text, font=info_font)
+            
             title_x = (width - title_width) // 2
             title_y = 550 if album_art_path else 100
             
             draw.text((title_x, title_y), title_text, font=title_font, fill=(255, 255, 255))
             
-            artist_bbox = draw.textbbox((0, 0), artist_text, font=info_font)
-            artist_width = artist_bbox[2] - artist_bbox[0]
             artist_x = (width - artist_width) // 2
             artist_y = title_y + 50
             
             draw.text((artist_x, artist_y), artist_text, font=info_font, fill=(200, 200, 200))
+            
             # Save the image
             image.save(output_path)
             return True
@@ -379,37 +412,50 @@ class MP3ToVideoConverter:
         except Exception as e:
             print(f"Error creating background image: {e}")
             # Fallback: save a simple image
-            draw.text((100, 100), f"{metadata['title']} - {metadata['album_artist']}", fill=(255, 255, 255))
+            draw.text((100, 100), f"{metadata['title'][:30]} - {metadata['album_artist'][:30]}", fill=(255, 255, 255))
             image.save(output_path)
             return False
     
     def create_video_segment(self, metadata, image_path, output_path):
         """Create a video segment for a single track without lyrics"""
         duration = metadata['duration']
+        
+        # Create filter complex for audio visualization
         filter_complex = (
             f"[1:a]aformat=sample_fmts=fltp:sample_rates=44100:channel_layouts=stereo,"
-            f"showwaves=mode=cline:draw=full:s=240X240:colors={self.wavecolor}|0xFFFFFF:split_channels=1:rate=25,"
+            f"showwaves=mode=cline:draw=full:s=240x240:colors={self.wavecolor}|0xFFFFFF:split_channels=1:rate={self.frate},"
             f"geq='p(mod(W/PI*(PI+atan2(H/2-Y,X-W/2)),W), H-2*hypot(H/2-Y,X-W/2))':"
             f"a='alpha(mod(W/PI*(PI+atan2(H/2-Y,X-W/2)),W), H-2*hypot(H/2-Y,X-W/2))',scale=480:480:flags=fast_bilinear[auvis];"
             f"[0:v][auvis]overlay=x=720:y=600[outv]"
         )
+        
         cmd = [
             'ffmpeg',
-             "-filter_complex_threads", "0",  # Multi-thread filtergraph
-              '-loop', '1', '-i', str(image_path), '-i', metadata['path'],
-            '-filter_complex', filter_complex,'-map', '[outv]', '-map', '1:a',
-            '-c:v', 'libx264','-preset','fast',  '-t', str(duration), '-pix_fmt', 'yuv420p','-threads','0',
-            '-c:a', 'aac', '-strict', 'experimental','-threads','0','-b:a', str(self.arate)+'k','-b:v', str(self.vrate)+'k',
-            '-shortest', str(output_path), '-y'
+            '-filter_complex_threads', '0',
+            '-stream_loop', '1', '-i', str(image_path),
+            '-i', metadata['path'],
+            '-filter_complex', filter_complex,
+            '-map', '[outv]', '-map', '1:a',
+            '-c:v', self.codec,
+            '-t', str(duration),
+            '-pix_fmt', 'yuv420p',
+            '-threads', '0',
+            '-c:a', 'aac',
+            '-strict', 'experimental',
+            '-threads', '0',
+            '-b:a', f'{self.arate}k',
+            '-b:v', f'{self.vrate}k',
+            '-shortest',
+            '-r', str(self.frate),
+            str(output_path),
+            '-y'
         ]
         
         try:
-            result = subprocess.run(cmd, check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+            self.run_ffmpeg_command(cmd)
             return True
-        except subprocess.CalledProcessError as e:
+        except Exception as e:
             print(f"Error creating video segment: {e}")
-            print(f"FFmpeg command: {' '.join(cmd)}")
-            print(f"FFmpeg stderr: {e.stderr}")
             return False
     
     def create_video_with_scrolling_lyrics(self, metadata, bg_image_path, lyrics_image_path, lyrics_height, output_path):
@@ -417,13 +463,12 @@ class MP3ToVideoConverter:
         duration = metadata['duration']
         
         # Calculate scroll speed (pixels per second)
-        # We want the lyrics to scroll from bottom to top during the song duration
-        scroll_speed = (lyrics_height + 1080) / duration  # Add video height to ensure full scroll
+        scroll_speed = (lyrics_height + 1080) / duration
         
         # Create a complex filter for scrolling lyrics
         filter_complex = (
             f"[2:a]aformat=sample_fmts=fltp:sample_rates=44100:channel_layouts=stereo,"
-            f"showwaves=mode=cline:draw=full:s=240X240:colors={self.wavecolor}|0xFFFFFF:split_channels=1:rate=25,"
+            f"showwaves=mode=cline:draw=full:s=240x240:colors={self.wavecolor}|0xFFFFFF:split_channels=1:rate={self.frate},"
             f"geq='p(mod(W/PI*(PI+atan2(H/2-Y,X-W/2)),W), H-2*hypot(H/2-Y,X-W/2))':"
             f"a='alpha(mod(W/PI*(PI+atan2(H/2-Y,X-W/2)),W), H-2*hypot(H/2-Y,X-W/2))',scale=480:480:flags=fast_bilinear[auvis];"
             f"[1:v]scale=600:-1:flags=fast_bilinear,format=rgba [lyrics]; "
@@ -433,24 +478,32 @@ class MP3ToVideoConverter:
         
         cmd = [
             'ffmpeg',
-             "-filter_complex_threads", "0",  # Multi-thread filtergraph
-              '-loop', '1', '-i', str(bg_image_path),
-            '-loop', '1', '-i', str(lyrics_image_path),
+            '-filter_complex_threads', '0',
+            '-stream_loop', '1', '-i', str(bg_image_path),
+            '-stream_loop', '1', '-i', str(lyrics_image_path),
             '-i', metadata['path'],
             '-filter_complex', filter_complex,
             '-map', '[outv]', '-map', '2:a',
-            '-c:v', 'libx264','-preset','fast', '-t', str(duration), '-pix_fmt', 'yuv420p','-threads','0',
-            '-c:a', 'aac', '-strict', 'experimental','-threads','0', '-b:a', str(self.arate)+'k','-b:v', str(self.vrate)+'k',
-            '-shortest', str(output_path), '-y'
+            '-c:v', self.codec,
+            '-t', str(duration),
+            '-pix_fmt', 'yuv420p',
+            '-threads', '0',
+            '-c:a', 'aac',
+            '-strict', 'experimental',
+            '-threads', '0',
+            '-b:a', f'{self.arate}k',
+            '-b:v', f'{self.vrate}k',
+            '-shortest',
+            '-r', str(self.frate),
+            str(output_path),
+            '-y'
         ]
         
         try:
-            result = subprocess.run(cmd, check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+            self.run_ffmpeg_command(cmd)
             return True
-        except subprocess.CalledProcessError as e:
+        except Exception as e:
             print(f"Error creating video with scrolling lyrics: {e}")
-            print(f"FFmpeg command: {' '.join(cmd)}")
-            print(f"FFmpeg stderr: {e.stderr}")
             # Fallback to regular video without lyrics
             return self.create_video_segment(metadata, bg_image_path, output_path)
     
@@ -490,6 +543,8 @@ def main():
     parser.add_argument('--arate', type=int, default=192, help='Audio bitrate in kbits out video (default: 192)')
     parser.add_argument('--font', default='arial.ttf', help='Font file: default = arial.ttf')
     parser.add_argument('--shuffle', type=int, default=0, help='Set to 1 to shuffle input list.')
+    parser.add_argument('--frate', type=int, default=30, help='Video framerate (default 30).')
+    parser.add_argument('--codec', default='libx264', help='Codec, default - software encoding by libx264.For nvidia best - h264_nvenc.')
     args = parser.parse_args()
     
     # Check if ffmpeg is available
@@ -500,7 +555,17 @@ def main():
         return
     
     # Process the files
-    converter = MP3ToVideoConverter(args.input_folder, args.output_folder, args.batch_size, args.arate, args.vrate, args.font, args.shuffle)
+    converter = MP3ToVideoConverter(
+        args.input_folder, 
+        args.output_folder, 
+        args.batch_size, 
+        args.arate, 
+        args.vrate, 
+        args.font, 
+        args.shuffle, 
+        args.frate, 
+        args.codec
+    )
     converter.process_all()
 
 if __name__ == "__main__":
