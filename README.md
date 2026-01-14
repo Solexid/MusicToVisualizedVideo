@@ -31,6 +31,10 @@ options:
                         Number of tracks per video (adequate max value is 30, default: 25)
   --vrate VRATE         Out video bitrate in kbits (default: 550)
   --arate ARATE         Audio bitrate in kbits out video (default: 192)
+  --font FONT           Font file: default = arial.ttf
+  --shuffle SHUFFLE     Set to 1 to shuffle input list.
+  --frate FRATE         Video framerate (default 30).
+  --codec CODEC         Codec, default - software encoding by libx264.For nvidia best - h264_nvenc.
 ```
   
 # How it works:
