@@ -16,7 +16,13 @@ then<br>
 
 ```
 python.exe mtvv.py  ./ ./out
+
+or if you using nvidia and downloaded some font and placed inside folder (mine most used variant)
+
+python mtvv.py ./ ./out --batch-size 30  --vrate 1550 --arate 128 --font NotoSerifJP-VariableFont_wght.ttf --frate 60 --codec h264_nvenc
+
 ```
+
 <br>
 Where - ./ is input folder and ./out is output folder (for a sample we assume you placed script directly to music folder).<br><br>
 
