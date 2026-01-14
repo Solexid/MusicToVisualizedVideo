@@ -426,7 +426,7 @@ class MP3ToVideoConverter:
         # Create filter complex for audio visualization
         filter_complex = (
             f"[1:a]aformat=sample_fmts=fltp:sample_rates=44100:channel_layouts=stereo,"
-            f"showwaves=mode=cline:draw=full:s=240x240:colors={self.wavecolor}|0xFFFFFF:split_channels=1:rate={self.frate},"
+            f"showwaves=mode=cline:draw=full:s=240x240:colors={self.wavecolor}|0xFFFFFF:split_channels=1:rate={str(self.frate)},"
             f"geq='p(mod(W/PI*(PI+atan2(H/2-Y,X-W/2)),W), H-2*hypot(H/2-Y,X-W/2))':"
             f"a='alpha(mod(W/PI*(PI+atan2(H/2-Y,X-W/2)),W), H-2*hypot(H/2-Y,X-W/2))',scale=480:480:flags=fast_bilinear[auvis];"
             f"[0:v][auvis]overlay=x=720:y=600[outv]"
@@ -474,11 +474,11 @@ class MP3ToVideoConverter:
         # Create a complex filter for scrolling lyrics
         filter_complex = (
             f"[2:a]aformat=sample_fmts=fltp:sample_rates=44100:channel_layouts=stereo,"
-            f"showwaves=mode=cline:draw=full:s=240x240:colors={self.wavecolor}|0xFFFFFF:split_channels=1:rate={self.frate},"
+            f"showwaves=mode=cline:draw=full:s=240x240:colors={self.wavecolor}|0xFFFFFF:split_channels=1:rate={str(self.frate)},"
             f"geq='p(mod(W/PI*(PI+atan2(H/2-Y,X-W/2)),W), H-2*hypot(H/2-Y,X-W/2))':"
             f"a='alpha(mod(W/PI*(PI+atan2(H/2-Y,X-W/2)),W), H-2*hypot(H/2-Y,X-W/2))',scale=480:480:flags=fast_bilinear[auvis];"
             f"[1:v]scale=600:-1:flags=fast_bilinear,format=rgba [lyrics]; "
-            f"[0:v][lyrics]overlay=x=1270:y='if(gte(t,0), (H)-{scroll_speed}*t, 0)':shortest=1[lurv];"
+            f"[0:v][lyrics]overlay=x=1270:y='if(gte(t,0), (H)-{scroll_speed}*t, 0)':shortest=1,fps={str(self.frate)}[lurv];"
             f"[lurv][auvis]overlay=x=720:y=600[outv]"
         )
         
