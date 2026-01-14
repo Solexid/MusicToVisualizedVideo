@@ -418,6 +418,9 @@ class MP3ToVideoConverter:
     
     def create_video_segment(self, metadata, image_path, output_path):
         """Create a video segment for a single track without lyrics"""
+
+        print(f" Processing  : {metadata['title']}")
+
         duration = metadata['duration']
         
         # Create filter complex for audio visualization
@@ -460,8 +463,11 @@ class MP3ToVideoConverter:
     
     def create_video_with_scrolling_lyrics(self, metadata, bg_image_path, lyrics_image_path, lyrics_height, output_path):
         """Create a video with scrolling lyrics"""
+
+        print(f" Processing with lyrics : {metadata['title']}")
+
         duration = metadata['duration']
-        
+       
         # Calculate scroll speed (pixels per second)
         scroll_speed = (lyrics_height + 1080) / duration
         
@@ -479,8 +485,8 @@ class MP3ToVideoConverter:
         cmd = [
             'ffmpeg',
             '-filter_complex_threads', '0',
-            '-stream_loop', '1', '-i', str(bg_image_path),
-            '-stream_loop', '1', '-i', str(lyrics_image_path),
+            '-loop', '1', '-i', str(bg_image_path),
+            '-loop', '1', '-i', str(lyrics_image_path),
             '-i', metadata['path'],
             '-filter_complex', filter_complex,
             '-map', '[outv]', '-map', '2:a',
