@@ -13,7 +13,7 @@ import random
 from tqdm import tqdm
 
 class MP3ToVideoConverter:
-    def __init__(self, input_folder, output_folder, batch_size=25, arate=192, vrate=550, font='arial.ttf', shuffle=0, frate=30,codec = 'libx264'):
+    def __init__(self, input_folder, output_folder, batch_size=25, arate=192, vrate=550, font='arial.ttf', shuffle=0, frate=30,codec = 'libx264', vis_type=0, test=False):
         self.input_folder = Path(input_folder)
         self.output_folder = Path(output_folder)
         tempfile.tempdir = output_folder
@@ -24,6 +24,8 @@ class MP3ToVideoConverter:
         self.shuffle = shuffle
         self.frate = frate
         self.codec = codec
+        self.vis_type = vis_type
+        self.test = test
         self.processed_files = []
         self.to_process_files = []
         self.wavecolor = "0x9400D3"
@@ -416,6 +418,48 @@ class MP3ToVideoConverter:
             image.save(output_path)
             return False
     
+    def _create_audio_visualization_filter(self, has_lyrics=False):
+        """Create and return the audio visualization filter complex and overlay string.
+
+        Args:
+            has_lyrics: Whether lyrics are being used (affects audio stream index)
+
+        Returns a tuple: (filter_complex_part, overlay_expression)
+        where filter_complex_part produces [auvis] and overlay_expression is the overlay
+        placement string to be appended in the overall filter_complex.
+        """
+        # Audio stream index depends on whether lyrics are used
+        audio_index = 2 if has_lyrics else 1
+
+        if self.vis_type == 2:
+            # Full-width bottom visualization (10% height, 50% transparency)
+            filter_part = (
+                f"[{audio_index}:a]aformat=sample_fmts=fltp:sample_rates=44100:channel_layouts=stereo,"
+                f"showwaves=mode=line:draw=full:s=720x108:colors={self.wavecolor}|0x000000:split_channels=1:rate={str(self.frate)},"
+                f"format=rgba,colorchannelmixer=aa=0.5,scale=1920:432:flags=fast_bilinear[auvis]"
+            )
+            overlay = "[0:v][auvis]overlay=x=0:y=972[outv]"
+            return filter_part, overlay
+        elif self.vis_type == 1:
+            # Alternative visualization without geq
+            filter_part = (
+                f"[{audio_index}:a]aformat=sample_fmts=fltp:sample_rates=44100:channel_layouts=stereo,"
+                f"showwaves=mode=cline:draw=full:s=240x240:colors={self.wavecolor}|0xFFFFFF:split_channels=1:rate={str(self.frate)},"
+                f"scale=480:480:flags=fast_bilinear[auvis]"
+            )
+            overlay = "[0:v][auvis]overlay=x=720:y=600[outv]"
+            return filter_part, overlay
+        else:
+            # Original visualization with geq
+            filter_part = (
+                f"[{audio_index}:a]aformat=sample_fmts=fltp:sample_rates=44100:channel_layouts=stereo,"
+                f"showwaves=mode=cline:draw=full:s=240x240:colors={self.wavecolor}|0xFFFFFF:split_channels=1:rate={str(self.frate)},"
+                f"geq='p(mod(W/PI*(PI+atan2(H/2-Y,X-W/2)),W), H-2*hypot(H/2-Y,X-W/2))':"
+                f"a='alpha(mod(W/PI*(PI+atan2(H/2-Y,X-W/2)),W), H-2*hypot(H/2-Y,X-W/2))',scale=480:480:flags=fast_bilinear[auvis]"
+            )
+            overlay = "[0:v][auvis]overlay=x=720:y=600[outv]"
+            return filter_part, overlay
+    
     def create_video_segment(self, metadata, image_path, output_path):
         """Create a video segment for a single track without lyrics"""
 
@@ -423,14 +467,14 @@ class MP3ToVideoConverter:
 
         duration = metadata['duration']
         
-        # Create filter complex for audio visualization
-        filter_complex = (
-            f"[1:a]aformat=sample_fmts=fltp:sample_rates=44100:channel_layouts=stereo,"
-            f"showwaves=mode=cline:draw=full:s=240x240:colors={self.wavecolor}|0xFFFFFF:split_channels=1:rate={str(self.frate)},"
-            f"geq='p(mod(W/PI*(PI+atan2(H/2-Y,X-W/2)),W), H-2*hypot(H/2-Y,X-W/2))':"
-            f"a='alpha(mod(W/PI*(PI+atan2(H/2-Y,X-W/2)),W), H-2*hypot(H/2-Y,X-W/2))',scale=480:480:flags=fast_bilinear[auvis];"
-            f"[0:v][auvis]overlay=x=720:y=600[outv]"
-        )
+        # In test mode, limit to 60 seconds
+        if self.test:
+            duration = min(duration, 60)
+        
+        # Create filter complex for audio visualization (filter part and overlay)
+        # No lyrics, so audio is at index 1
+        auvis_filter_part, auvis_overlay = self._create_audio_visualization_filter(has_lyrics=False)
+        filter_complex = f"{auvis_filter_part};{auvis_overlay}"
         
         cmd = [
             'ffmpeg',
@@ -468,18 +512,38 @@ class MP3ToVideoConverter:
 
         duration = metadata['duration']
        
+        # In test mode, limit to 60 seconds
+        if self.test:
+            duration = min(duration, 60)
+        
         # Calculate scroll speed (pixels per second)
         scroll_speed = (lyrics_height + 1080) / duration
         
+        # Create audio visualization filter (filter part and overlay)
+        # Has lyrics, so audio is at index 2
+        auvis_filter_part, auvis_overlay = self._create_audio_visualization_filter(has_lyrics=True)
+
+        # Create a complex filter for scrolling lyrics. The auvis_overlay is expected to
+        # reference [auvis] and combine it with the main video; for the lyrics case we
+        # first overlay lyrics onto the background producing [lurv], then overlay [auvis]
+        # onto that. We therefore replace the default [0:v][auvis] overlay with
+        # "[lurv][auvis]overlay=..." when auvis_overlay uses [0:v] as the first input.
+        # To keep it simple, construct the final overlay by taking the RHS of auvis_overlay
+        # after the closing bracket of auvis (i.e., the overlay args).
+        # auvis_overlay is like: "[0:v][auvis]overlay=x=720:y=600[outv]" -> we need
+        # "[lurv][auvis]overlay=x=720:y=600[outv]"
+        if "[0:v][auvis]overlay" in auvis_overlay:
+            auvis_overlay_for_lyrics = auvis_overlay.replace("[0:v][auvis]overlay", "[lurv][auvis]overlay")
+        else:
+            # fallback
+            auvis_overlay_for_lyrics = "[lurv][auvis]overlay=x=720:y=600[outv]"
+
         # Create a complex filter for scrolling lyrics
         filter_complex = (
-            f"[2:a]aformat=sample_fmts=fltp:sample_rates=44100:channel_layouts=stereo,"
-            f"showwaves=mode=cline:draw=full:s=240x240:colors={self.wavecolor}|0xFFFFFF:split_channels=1:rate={str(self.frate)},"
-            f"geq='p(mod(W/PI*(PI+atan2(H/2-Y,X-W/2)),W), H-2*hypot(H/2-Y,X-W/2))':"
-            f"a='alpha(mod(W/PI*(PI+atan2(H/2-Y,X-W/2)),W), H-2*hypot(H/2-Y,X-W/2))',scale=480:480:flags=fast_bilinear[auvis];"
+            f"{auvis_filter_part};"
             f"[1:v]scale=600:-1:flags=fast_bilinear,format=rgba [lyrics]; "
             f"[0:v][lyrics]overlay=x=1270:y='if(gte(t,0), (H)-{scroll_speed}*t, 0)':shortest=1,fps={str(self.frate)}[lurv];"
-            f"[lurv][auvis]overlay=x=720:y=600[outv]"
+            f"{auvis_overlay_for_lyrics}"
         )
         
         cmd = [
@@ -551,6 +615,8 @@ def main():
     parser.add_argument('--shuffle', type=int, default=0, help='Set to 1 to shuffle input list.')
     parser.add_argument('--frate', type=int, default=30, help='Video framerate (default 30).')
     parser.add_argument('--codec', default='libx264', help='Codec, default - software encoding by libx264.For nvidia best - h264_nvenc.')
+    parser.add_argument('--vis-type', type=int, default=0, help='Visualization type: 0 for sphere showwaves (with geq), 1 for just showwaves, 2 for full-width showwaves bottom visualization')
+    parser.add_argument('--test', action='store_true', help='Run in test mode - process only 60 seconds of each track')
     args = parser.parse_args()
     
     # Check if ffmpeg is available
@@ -570,7 +636,9 @@ def main():
         args.font, 
         args.shuffle, 
         args.frate, 
-        args.codec
+        args.codec,
+        args.vis_type,
+        args.test
     )
     converter.process_all()
 
