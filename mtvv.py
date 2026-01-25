@@ -435,10 +435,10 @@ class MP3ToVideoConverter:
             # Full-width bottom visualization (10% height, 50% transparency)
             filter_part = (
                 f"[{audio_index}:a]aformat=sample_fmts=fltp:sample_rates=44100:channel_layouts=stereo,"
-                f"showwaves=mode=line:draw=full:s=720x108:colors={self.wavecolor}|0x000000:split_channels=1:rate={str(self.frate)},"
+                f"showwaves=mode=line:draw=full:s=720x108:colors=0x9400D3|{self.wavecolor}:rate={str(self.frate)},"
                 f"format=rgba,colorchannelmixer=aa=0.5,scale=1920:432:flags=fast_bilinear[auvis]"
             )
-            overlay = "[0:v][auvis]overlay=x=0:y=972[outv]"
+            overlay = "[0:v][auvis]overlay=x=0:y=864[outv]"
             return filter_part, overlay
         elif self.vis_type == 1:
             # Alternative visualization without geq
