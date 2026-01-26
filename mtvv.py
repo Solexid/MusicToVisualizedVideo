@@ -431,34 +431,57 @@ class MP3ToVideoConverter:
         # Audio stream index depends on whether lyrics are used
         audio_index = 2 if has_lyrics else 1
 
-        if self.vis_type == 2:
-            # Full-width bottom visualization (10% height, 50% transparency)
-            filter_part = (
-                f"[{audio_index}:a]aformat=sample_fmts=fltp:sample_rates=44100:channel_layouts=stereo,"
-                f"showwaves=mode=cline:draw=full:s=720x108:colors=0x9400D3|{self.wavecolor}:rate={str(self.frate)},"
-                f"format=rgba,colorchannelmixer=aa=0.85,scale=1920:432:flags=fast_bilinear[auvis]"
-            )
-            overlay = "[0:v][auvis]overlay=x=0:y=864[outv]"
-            return filter_part, overlay
-        elif self.vis_type == 1:
-            # Alternative visualization without geq
-            filter_part = (
-                f"[{audio_index}:a]aformat=sample_fmts=fltp:sample_rates=44100:channel_layouts=stereo,"
-                f"showwaves=mode=cline:draw=full:s=240x240:colors={self.wavecolor}|0xFFFFFF:split_channels=1:rate={str(self.frate)},"
-                f"scale=480:480:flags=fast_bilinear[auvis]"
-            )
-            overlay = "[0:v][auvis]overlay=x=720:y=600[outv]"
-            return filter_part, overlay
-        else:
-            # Original visualization with geq
-            filter_part = (
+        # Dictionary mapping visualization types to their filter configurations
+        vis_configs = {
+            
+            1: (
+                # Alternative visualization without geq
+                (
+                    f"[{audio_index}:a]aformat=sample_fmts=fltp:sample_rates=44100:channel_layouts=stereo,"
+                    f"showwaves=mode=cline:draw=full:s=240x240:colors={self.wavecolor}|0xFFFFFF:split_channels=1:rate={str(self.frate)},"
+                    f"scale=480:480:flags=fast_bilinear[auvis]"
+                ),
+                "[0:v][auvis]overlay=x=720:y=600[outv]"
+            ),
+            2: (
+                # Full-width bottom visualization (10% height)
+                (
+                    f"[{audio_index}:a]aformat=sample_fmts=fltp:sample_rates=44100:channel_layouts=stereo,"
+                    f"showwaves=mode=cline:draw=full:s=720x108:colors=0x9400D3|{self.wavecolor}:rate={str(self.frate)},"
+                    f"format=rgba,colorchannelmixer=aa=0.85,scale=1920:432:flags=fast_bilinear[auvis]"
+                ),
+                "[0:v][auvis]overlay=x=0:y=864[outv]"
+            ),
+            3: (
+                # Top / bottom simultaneous visualization
+                (
+                    f"[{audio_index}:a]aformat=sample_fmts=fltp:sample_rates=44100:channel_layouts=stereo,"
+                    f"showwaves=mode=cline:draw=full:s=720x108:colors={self.wavecolor}:rate={str(self.frate)},"
+                    f"split[wave1][wave2];"
+                    f"[wave1]crop=720:54:0:54[wave1_cropped];"
+                    f"[wave2]crop=720:54:0:0[wave2_cropped];"
+                    f"[wave1_cropped]pad=720:216:0:0:color=0x00000000[wave1_padded];"
+                    f"[wave2_cropped]pad=720:216:0:162:color=0x00000000[wave2_padded];"
+                    f"[wave1_padded][wave2_padded]vstack[temp_screen];"
+                    f"[temp_screen]format=rgba,colorchannelmixer=aa=0.85,scale=1920:1080:flags=fast_bilinear[auvis]"
+                ),
+                "[0:v][auvis]overlay=x=0:y=0[outv]"
+            ),
+        }
+
+        # Default configuration (vis_type 0) - Original visualization with geq
+        default_config = (
+            (
                 f"[{audio_index}:a]aformat=sample_fmts=fltp:sample_rates=44100:channel_layouts=stereo,"
                 f"showwaves=mode=cline:draw=full:s=240x240:colors={self.wavecolor}|0xFFFFFF:split_channels=1:rate={str(self.frate)},"
                 f"geq='p(mod(W/PI*(PI+atan2(H/2-Y,X-W/2)),W), H-2*hypot(H/2-Y,X-W/2))':"
                 f"a='alpha(mod(W/PI*(PI+atan2(H/2-Y,X-W/2)),W), H-2*hypot(H/2-Y,X-W/2))',scale=480:480:flags=fast_bilinear[auvis]"
-            )
-            overlay = "[0:v][auvis]overlay=x=720:y=600[outv]"
-            return filter_part, overlay
+            ),
+            "[0:v][auvis]overlay=x=720:y=600[outv]"
+        )
+
+        # Switch-case using dictionary get method
+        return vis_configs.get(self.vis_type, default_config)
     
     def create_video_segment(self, metadata, image_path, output_path):
         """Create a video segment for a single track without lyrics"""
@@ -615,7 +638,7 @@ def main():
     parser.add_argument('--shuffle', type=int, default=0, help='Set to 1 to shuffle input list.')
     parser.add_argument('--frate', type=int, default=30, help='Video framerate (default 30).')
     parser.add_argument('--codec', default='libx264', help='Codec, default - software encoding by libx264.For nvidia best - h264_nvenc.')
-    parser.add_argument('--vis-type', type=int, default=0, help='Visualization type: 0 for sphere showwaves (with geq), 1 for just showwaves, 2 for full-width showwaves bottom visualization')
+    parser.add_argument('--vis-type', type=int, default=0, help='Visualization type: 0 for sphere showwaves (with geq), 1 for just showwaves, 2 for full-width showwaves bottom visualization, 3 for top/bottom simultaneous visualization (default: 0)')
     parser.add_argument('--test', action='store_true', help='Run in test mode - process only 60 seconds of each track')
     args = parser.parse_args()
     
