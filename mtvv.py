@@ -13,7 +13,7 @@ import random
 from tqdm import tqdm
 
 class MP3ToVideoConverter:
-    def __init__(self, input_folder, output_folder, batch_size=25, arate=192, vrate=550, font='arial.ttf', shuffle=0, frate=30,codec = 'libx264', vis_type=0, test=False):
+    def __init__(self, input_folder, output_folder, batch_size=25, arate=192, vrate=550, font='arial.ttf', shuffle=0, frate=30,codec = 'libx264', vis_type=0, test=False, wavecolor=None, wavecolor2=None):
         self.input_folder = Path(input_folder)
         self.output_folder = Path(output_folder)
         tempfile.tempdir = output_folder
@@ -28,7 +28,9 @@ class MP3ToVideoConverter:
         self.test = test
         self.processed_files = []
         self.to_process_files = []
-        self.wavecolor = "0x9400D3"
+        # Use provided colors or defaults
+        self.wavecolor = wavecolor if wavecolor else "0xFEFEFE"
+        self.wavecolor2 = wavecolor2 if wavecolor2 else "0x9400D3"
         # Create output folder if it doesn't exist
         self.output_folder.mkdir(exist_ok=True)
         
@@ -142,7 +144,8 @@ class MP3ToVideoConverter:
             img = Image.open(output_path)
             resized_img = img.resize((1, 1), Image.BICUBIC)
             r, g, b = resized_img.convert('RGB').getpixel((0,0))
-            self.wavecolor = f"0x{r:02x}{g:02x}{b:02x}"
+            if self.wavecolor == "0xFEFEFE":
+                self.wavecolor = f"0x{r:02x}{g:02x}{b:02x}"
             img = img.resize(size, Image.LANCZOS)
             img.save(output_path)
             return True
@@ -438,7 +441,7 @@ class MP3ToVideoConverter:
                 # Alternative visualization without geq
                 (
                     f"[{audio_index}:a]aformat=sample_fmts=fltp:sample_rates=44100:channel_layouts=stereo,"
-                    f"showwaves=mode=cline:draw=full:s=240x240:colors={self.wavecolor}|0x9400D3:rate={str(self.frate)},"
+                    f"showwaves=mode=cline:draw=full:s=240x240:colors={self.wavecolor2}|{self.wavecolor}:rate={str(self.frate)},"
                     f"scale=480:480:flags=fast_bilinear[auvis]"
                 ),
                 "[0:v][auvis]overlay=x=720:y=600[outv]"
@@ -447,7 +450,7 @@ class MP3ToVideoConverter:
                 # Full-width bottom visualization (10% height)
                 (
                     f"[{audio_index}:a]aformat=sample_fmts=fltp:sample_rates=44100:channel_layouts=stereo,"
-                    f"showwaves=mode=cline:draw=full:s=720x108:colors=0x9400D3|{self.wavecolor}:rate={str(self.frate)},"
+                    f"showwaves=mode=cline:draw=full:s=720x108:colors={self.wavecolor2}|{self.wavecolor}:rate={str(self.frate)},"
                     f"format=rgba,colorchannelmixer=aa=0.85,scale=1920:432:flags=fast_bilinear[auvis]"
                 ),
                 "[0:v][auvis]overlay=x=0:y=864[outv]"
@@ -482,7 +485,7 @@ class MP3ToVideoConverter:
         default_config = (
             (
                 f"[{audio_index}:a]aformat=sample_fmts=fltp:sample_rates=44100:channel_layouts=stereo,"
-                f"showwaves=mode=cline:draw=full:s=240x240:colors={self.wavecolor}|0xFFFFFF:split_channels=1:rate={str(self.frate)},"
+                f"showwaves=mode=cline:draw=full:s=240x240:colors={self.wavecolor2}|{self.wavecolor}:split_channels=1:rate={str(self.frate)},"
                 f"geq='p(mod(W/PI*(PI+atan2(H/2-Y,X-W/2)),W), H-2*hypot(H/2-Y,X-W/2))':"
                 f"a='alpha(mod(W/PI*(PI+atan2(H/2-Y,X-W/2)),W), H-2*hypot(H/2-Y,X-W/2))',scale=480:480:flags=fast_bilinear[auvis]"
             ),
@@ -644,6 +647,8 @@ def main():
     parser.add_argument('--codec', default='libx264', help='Codec, default - software encoding by libx264.For nvidia best - h264_nvenc.')
     parser.add_argument('--vis-type', type=int, default=0, help='Visualization type: 0 for sphere showwaves (with geq), 1 for just showwaves, 2 for full-width showwaves bottom visualization, 3 for top/bottom simultaneous visualization, 4 - avectorscope. (default: 0)')
     parser.add_argument('--test', action='store_true', help='Run in test mode - process only 60 seconds of each track')
+    parser.add_argument('--wavecolor', help='Wave color in hex or from ffmpeg color table (default: album art dominant color)')
+    parser.add_argument('--wavecolor2', help='Secondary wave color in hex or from ffmpeg color table (default: 0x9400D3)')
     args = parser.parse_args()
     
     # Check if ffmpeg is available
@@ -655,17 +660,19 @@ def main():
     
     # Process the files
     converter = MP3ToVideoConverter(
-        args.input_folder, 
-        args.output_folder, 
-        args.batch_size, 
-        args.arate, 
-        args.vrate, 
-        args.font, 
-        args.shuffle, 
-        args.frate, 
+        args.input_folder,
+        args.output_folder,
+        args.batch_size,
+        args.arate,
+        args.vrate,
+        args.font,
+        args.shuffle,
+        args.frate,
         args.codec,
         args.vis_type,
-        args.test
+        args.test,
+        args.wavecolor,
+        args.wavecolor2
     )
     converter.process_all()
 
