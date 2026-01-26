@@ -433,12 +433,12 @@ class MP3ToVideoConverter:
 
         # Dictionary mapping visualization types to their filter configurations
         vis_configs = {
-            
+
             1: (
                 # Alternative visualization without geq
                 (
                     f"[{audio_index}:a]aformat=sample_fmts=fltp:sample_rates=44100:channel_layouts=stereo,"
-                    f"showwaves=mode=cline:draw=full:s=240x240:colors={self.wavecolor}|0xFFFFFF:split_channels=1:rate={str(self.frate)},"
+                    f"showwaves=mode=cline:draw=full:s=240x240:colors={self.wavecolor}|0x9400D3:rate={str(self.frate)},"
                     f"scale=480:480:flags=fast_bilinear[auvis]"
                 ),
                 "[0:v][auvis]overlay=x=720:y=600[outv]"
@@ -466,6 +466,15 @@ class MP3ToVideoConverter:
                     f"[temp_screen]format=rgba,colorchannelmixer=aa=0.85,scale=1920:1080:flags=fast_bilinear[auvis]"
                 ),
                 "[0:v][auvis]overlay=x=0:y=0[outv]"
+            ),
+            4: (
+                # Alternative visualization using avectorscope 
+                (
+                    f"[{audio_index}:a]aformat=sample_fmts=fltp:sample_rates=44100:channel_layouts=stereo,"
+                    f"avectorscope=mode=lissajous:swap=1:draw=line:s=720x720:rate={str(self.frate)},"
+                    f"rotate=90*PI/180:oh=ow[auvis]"
+                ),
+                "[0:v][auvis]overlay=x=600:y=440[outv]"
             ),
         }
 
@@ -549,12 +558,7 @@ class MP3ToVideoConverter:
         # Create a complex filter for scrolling lyrics. The auvis_overlay is expected to
         # reference [auvis] and combine it with the main video; for the lyrics case we
         # first overlay lyrics onto the background producing [lurv], then overlay [auvis]
-        # onto that. We therefore replace the default [0:v][auvis] overlay with
-        # "[lurv][auvis]overlay=..." when auvis_overlay uses [0:v] as the first input.
-        # To keep it simple, construct the final overlay by taking the RHS of auvis_overlay
-        # after the closing bracket of auvis (i.e., the overlay args).
-        # auvis_overlay is like: "[0:v][auvis]overlay=x=720:y=600[outv]" -> we need
-        # "[lurv][auvis]overlay=x=720:y=600[outv]"
+        # onto that."
         if "[0:v][auvis]overlay" in auvis_overlay:
             auvis_overlay_for_lyrics = auvis_overlay.replace("[0:v][auvis]overlay", "[lurv][auvis]overlay")
         else:
@@ -638,7 +642,7 @@ def main():
     parser.add_argument('--shuffle', type=int, default=0, help='Set to 1 to shuffle input list.')
     parser.add_argument('--frate', type=int, default=30, help='Video framerate (default 30).')
     parser.add_argument('--codec', default='libx264', help='Codec, default - software encoding by libx264.For nvidia best - h264_nvenc.')
-    parser.add_argument('--vis-type', type=int, default=0, help='Visualization type: 0 for sphere showwaves (with geq), 1 for just showwaves, 2 for full-width showwaves bottom visualization, 3 for top/bottom simultaneous visualization (default: 0)')
+    parser.add_argument('--vis-type', type=int, default=0, help='Visualization type: 0 for sphere showwaves (with geq), 1 for just showwaves, 2 for full-width showwaves bottom visualization, 3 for top/bottom simultaneous visualization, 4 - avectorscope. (default: 0)')
     parser.add_argument('--test', action='store_true', help='Run in test mode - process only 60 seconds of each track')
     args = parser.parse_args()
     
