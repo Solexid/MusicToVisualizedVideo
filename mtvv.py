@@ -481,6 +481,16 @@ class MP3ToVideoConverter:
                 ),
                 "[0:v][auvis]overlay=x=600:y=440[outv]"
             ),
+            5: (
+                # Circular projection visualization using GLSL shader
+                (
+                    f"[{audio_index}:a]aformat=sample_fmts=fltp:sample_rates=44100:channel_layouts=stereo,"
+                    f"showwaves=mode=cline:draw=full:s=120x120:colors={self.wavecolor2}|{self.wavecolor}:split_channels=1:rate={str(self.frate)},"
+                    f"scale=480:480:flags=fast_bilinear[wave],"
+                    f"[wave]libplacebo=custom_shader_path=circle.glsl[auvis]"
+                ),
+                "[0:v][auvis]overlay=x=720:y=600[outv]"
+            ),
         }
 
         # Default configuration (vis_type 0) - Original visualization with geq
@@ -649,7 +659,12 @@ def main():
     parser.add_argument('--shuffle', type=int, default=0, help='Set to 1 to shuffle input list.')
     parser.add_argument('--frate', type=int, default=30, help='Video framerate (default 30).')
     parser.add_argument('--codec', default='libx264', help='Codec, default - software encoding by libx264.For nvidia best - h264_nvenc.')
-    parser.add_argument('--vis-type', type=int, default=0, help='Visualization type: 0 for sphere showwaves (with geq), 1 for just showwaves, 2 for full-width showwaves bottom visualization, 3 for top/bottom simultaneous visualization, 4 - avectorscope. (default: 0)')
+    parser.add_argument('--vis-type', type=int, default=0, help='Visualization type: 0 for sphere showwaves (with geq),' \
+    ' 1 for just showwaves,' \
+    ' 2 for full-width showwaves bottom visualization,' \
+    ' 3 for top/bottom simultaneous visualization,' \
+    ' 4 - avectorscope,' \
+    ' 5 - circular projection with GLSL shader. (default: 0)')
     parser.add_argument('--test', action='store_true', help='Run in test mode - process only 60 seconds of each track')
     parser.add_argument('--wavecolor', help='Wave color in hex or from ffmpeg color table (default: album art dominant color)')
     parser.add_argument('--wavecolor2', help='Secondary wave color in hex or from ffmpeg color table (default: 0x9400D3)')
