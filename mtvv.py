@@ -325,7 +325,7 @@ class MP3ToVideoConverter:
             output_video = self.output_folder / f"batch_{batch_index}.mp4"
             cmd = [
                 'ffmpeg', '-f', 'concat', '-safe', '0', '-i', str(concat_file),
-                '-c', 'copy', str(output_video), '-y'
+                '-c', 'copy', str(output_video),'-movflags', 'faststart', '-y'
             ]
             
             try:
@@ -530,6 +530,7 @@ class MP3ToVideoConverter:
             '-b:a', f'{self.arate}k',
             '-b:v', f'{self.vrate}k',
             '-shortest',
+            '-movflags', 'faststart',
             '-r', str(self.frate),
             str(output_path),
             '-y'
@@ -596,6 +597,7 @@ class MP3ToVideoConverter:
             '-b:a', f'{self.arate}k',
             '-b:v', f'{self.vrate}k',
             '-shortest',
+            '-movflags', 'faststart',
             '-r', str(self.frate),
             str(output_path),
             '-y'
