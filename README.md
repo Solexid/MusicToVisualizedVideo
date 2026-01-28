@@ -27,6 +27,11 @@ python mtvv.py ./ ./out --batch-size 30  --vrate 1550 --arate 128 --font NotoSer
 Where - ./ is input folder and ./out is output folder (for a sample we assume you placed script directly to music folder).<br><br>
 
 ```
+usage: mtvv.py [-h] [--batch-size BATCH_SIZE] [--vrate VRATE] [--arate ARATE] [--font FONT] [--shuffle SHUFFLE]
+               [--frate FRATE] [--codec CODEC] [--vis-type VIS_TYPE] [--test] [--wavecolor WAVECOLOR]
+               [--wavecolor2 WAVECOLOR2]
+               input_folder output_folder
+
 positional arguments:
   input_folder          Folder containing MP3 files
   output_folder         Folder to save MP4 videos
@@ -41,6 +46,14 @@ options:
   --shuffle SHUFFLE     Set to 1 to shuffle input list.
   --frate FRATE         Video framerate (default 30).
   --codec CODEC         Codec, default - software encoding by libx264.For nvidia best - h264_nvenc.
+  --vis-type VIS_TYPE   Visualization type: 0 for sphere showwaves (with geq), 1 for just showwaves, 2 for full-width
+                        showwaves bottom visualization, 3 for top/bottom simultaneous visualization, 4 - avectorscope.
+                        (default: 0)
+  --test                Run in test mode - process only 60 seconds of each track
+  --wavecolor WAVECOLOR
+                        Wave color in hex or from ffmpeg color table (default: album art dominant color)
+  --wavecolor2 WAVECOLOR2
+                        Secondary wave color in hex or from ffmpeg color table (default: 0x9400D3)
 ```
   
 # How it works:
