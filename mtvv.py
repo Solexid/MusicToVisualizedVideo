@@ -29,6 +29,8 @@ class MP3ToVideoConverter:
         self.processed_files = []
         self.to_process_files = []
         # Use provided colors or defaults
+        
+        self.is_wavecolor_generate = False if wavecolor else True
         self.wavecolor = wavecolor if wavecolor else "0xFEFEFE"
         self.wavecolor2 = wavecolor2 if wavecolor2 else "0x9400D3"
         # Create output folder if it doesn't exist
@@ -144,7 +146,7 @@ class MP3ToVideoConverter:
             img = Image.open(output_path)
             resized_img = img.resize((1, 1), Image.BICUBIC)
             r, g, b = resized_img.convert('RGB').getpixel((0,0))
-            if self.wavecolor == "0xFEFEFE":
+            if self.is_wavecolor_generate:
                 self.wavecolor = f"0x{r:02x}{g:02x}{b:02x}"
             img = img.resize(size, Image.LANCZOS)
             img.save(output_path)
