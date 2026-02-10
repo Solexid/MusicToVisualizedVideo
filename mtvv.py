@@ -13,7 +13,7 @@ import random
 from tqdm import tqdm
 
 class MP3ToVideoConverter:
-    def __init__(self, input_folder, output_folder, batch_size=25, arate=192, vrate=550, font='arial.ttf', shuffle=0, frate=30,codec = 'libx264', vis_type=0, test=False, wavecolor=None, wavecolor2=None):
+    def __init__(self, input_folder, output_folder, batch_size=25, arate=192, vrate=550, font='arial.ttf', shuffle=0, frate=30,codec = 'libx264', vis_type=0, test=False, wavecolor=None, wavecolor2=None, afreq=44100):
         self.input_folder = Path(input_folder)
         self.output_folder = Path(output_folder)
         tempfile.tempdir = output_folder
@@ -26,6 +26,7 @@ class MP3ToVideoConverter:
         self.codec = codec
         self.vis_type = vis_type
         self.test = test
+        self.afreq = afreq
         self.processed_files = []
         self.to_process_files = []
         # Use provided colors or defaults
@@ -240,6 +241,9 @@ class MP3ToVideoConverter:
                 env=env
             )
             return result
+        except KeyboardInterrupt:
+            print("\nProcess interrupted by user. Exiting gracefully...")
+            raise
         except subprocess.CalledProcessError as e:
             print(f"FFmpeg command failed: {' '.join(cmd)}")
             print(f"FFmpeg stderr: {e.stderr}")
@@ -261,74 +265,82 @@ class MP3ToVideoConverter:
             return False
         
         # Create temporary directory for intermediate files
-        with tempfile.TemporaryDirectory() as temp_dir:
+        # In test mode, preserve temp dir so files aren't cleaned up if stopped
+        temp_dir_context = None
+        if self.test:
+            temp_dir = tempfile.mkdtemp(dir=self.output_folder)
             temp_path = Path(temp_dir)
-            
-            # Create a text file with track list for this batch
-            track_list_file = temp_path / "track_list.txt"
-            with open(track_list_file, 'w', encoding='utf-8') as f:
-                for i, metadata in enumerate(metadata_list):
-                    f.write(f"{i+1}. {metadata['title']} - {metadata['album_artist']}\n")
-            
-            # Process each track in the batch
-            video_segments = []
-            for i, metadata in enumerate(tqdm(metadata_list, desc=f"Processing batch {batch_index}", unit="track")):
-                # Create album art image if available
-                album_art_path = None
-                if metadata['album_art']:
-                    album_art_path = temp_path / f"album_art_{i}.jpg"
-                    self.create_album_art_image(metadata['album_art'], album_art_path)
-                
-                # Create background image with track info (without lyrics)
-                bg_image_path = temp_path / f"bg_{i}.jpg"
-                self.create_background_image(
-                    metadata, 
-                    bg_image_path, 
-                    album_art_path if album_art_path else None,
-                    track_list_file,
-                    i  # Current track index for highlighting
-                )
-                
-                # Create video segment for this track
-                segment_path = temp_path / f"segment_{i}.mp4"
-                
-                # If lyrics are available, create a scrolling lyrics video
-                if metadata['lyrics']:
-                    lyrics_image_path = temp_path / f"lyrics_{i}.png"
-                    lyrics_height = self.create_lyrics_image(metadata['lyrics'], lyrics_image_path, 600, 25)
-                    
-                    if lyrics_height > 0:
-                        # Create video with scrolling lyrics
-                        self.create_video_with_scrolling_lyrics(
-                            metadata, 
-                            bg_image_path, 
-                            lyrics_image_path, 
-                            lyrics_height,
-                            segment_path
-                        )
-                    else:
-                        # Fallback to regular video without lyrics
-                        self.create_video_segment(metadata, bg_image_path, segment_path)
-                else:
-                    # Create regular video without lyrics
-                    self.create_video_segment(metadata, bg_image_path, segment_path)
-                
-                video_segments.append(f"segment_{i}.mp4")
-                print(f" File {metadata['title']} processed to segment_{i}.mp4 ")
-            
-            # Concatenate all video segments
-            concat_file = temp_path / "concat_list.txt"
-            with open(concat_file, 'w', encoding='utf-8') as f:
-                for segment in video_segments:
-                    f.write(f"file '{segment}'\n")
-            
-            output_video = self.output_folder / f"batch_{batch_index}.mp4"
-            cmd = [
-                'ffmpeg', '-f', 'concat', '-safe', '0', '-i', str(concat_file),
-                '-c', 'copy', str(output_video),'-movflags', 'faststart', '-y'
-            ]
-            
+            print(f"Test mode: Temp directory preserved at {temp_path}")
+        else:
+            temp_dir_context = tempfile.TemporaryDirectory()
+            temp_path = Path(temp_dir_context.name)
+        
+        try:
             try:
+                # Create a text file with track list for this batch
+                track_list_file = temp_path / "track_list.txt"
+                with open(track_list_file, 'w', encoding='utf-8') as f:
+                    for i, metadata in enumerate(metadata_list):
+                        f.write(f"{i+1}. {metadata['title']} - {metadata['album_artist']}\n")
+                
+                # Process each track in the batch
+                video_segments = []
+                for i, metadata in enumerate(tqdm(metadata_list, desc=f"Processing batch {batch_index}", unit="track")):
+                    # Create album art image if available
+                    album_art_path = None
+                    if metadata['album_art']:
+                        album_art_path = temp_path / f"album_art_{i}.jpg"
+                        self.create_album_art_image(metadata['album_art'], album_art_path)
+                    
+                    # Create background image with track info (without lyrics)
+                    bg_image_path = temp_path / f"bg_{i}.jpg"
+                    self.create_background_image(
+                        metadata, 
+                        bg_image_path, 
+                        album_art_path if album_art_path else None,
+                        track_list_file,
+                        i  # Current track index for highlighting
+                    )
+                    
+                    # Create video segment for this track
+                    segment_path = temp_path / f"segment_{i}.mp4"
+                    
+                    # If lyrics are available, create a scrolling lyrics video
+                    if metadata['lyrics']:
+                        lyrics_image_path = temp_path / f"lyrics_{i}.png"
+                        lyrics_height = self.create_lyrics_image(metadata['lyrics'], lyrics_image_path, 600, 25)
+                        
+                        if lyrics_height > 0:
+                            # Create video with scrolling lyrics
+                            self.create_video_with_scrolling_lyrics(
+                                metadata, 
+                                bg_image_path, 
+                                lyrics_image_path, 
+                                lyrics_height,
+                                segment_path
+                            )
+                        else:
+                            # Fallback to regular video without lyrics
+                            self.create_video_segment(metadata, bg_image_path, segment_path)
+                    else:
+                        # Create regular video without lyrics
+                        self.create_video_segment(metadata, bg_image_path, segment_path)
+                    
+                    video_segments.append(f"segment_{i}.mp4")
+                    print(f" File {metadata['title']} processed to segment_{i}.mp4 ")
+                
+                # Concatenate all video segments
+                concat_file = temp_path / "concat_list.txt"
+                with open(concat_file, 'w', encoding='utf-8') as f:
+                    for segment in video_segments:
+                        f.write(f"file '{segment}'\n")
+                
+                output_video = self.output_folder / f"batch_{batch_index}.mp4"
+                cmd = [
+                    'ffmpeg', '-f', 'concat', '-safe', '0', '-i', str(concat_file),
+                    '-c', 'copy', str(output_video),'-movflags', 'faststart', '-y'
+                ]
+                
                 self.run_ffmpeg_command(cmd)
                 # Mark files as processed
                 for metadata in metadata_list:
@@ -339,9 +351,19 @@ class MP3ToVideoConverter:
                     json.dump(self.processed_files, f, ensure_ascii=False, indent=2)
                 
                 return True
+            except KeyboardInterrupt:
+                print("\nProcess interrupted by user. Exiting gracefully...")
+                # Cleanup temp directory in non-test mode
+                if not self.test and temp_dir_context:
+                    temp_dir_context.cleanup()
+                raise
             except Exception as e:
                 print(f"Error creating video: {e}")
                 return False
+        finally:
+            # Cleanup temp directory in non-test mode
+            if not self.test and temp_dir_context:
+                temp_dir_context.cleanup()
     
     def create_background_image(self, metadata, output_path, album_art_path=None, track_list_file=None, current_track_index=0):
         """Create background image with track info and track list (without lyrics)"""
@@ -442,7 +464,7 @@ class MP3ToVideoConverter:
             1: (
                 # Alternative visualization without geq
                 (
-                    f"[{audio_index}:a]aformat=sample_fmts=fltp:sample_rates=44100:channel_layouts=stereo,"
+                    f"[{audio_index}:a]aformat=sample_fmts=fltp:sample_rates={self.afreq}:channel_layouts=stereo,"
                     f"showwaves=mode=cline:draw=full:s=240x240:colors={self.wavecolor2}|{self.wavecolor}:rate={str(self.frate)},"
                     f"scale=480:480:flags=fast_bilinear[auvis]"
                 ),
@@ -451,7 +473,7 @@ class MP3ToVideoConverter:
             2: (
                 # Full-width bottom visualization (10% height)
                 (
-                    f"[{audio_index}:a]aformat=sample_fmts=fltp:sample_rates=44100:channel_layouts=stereo,"
+                    f"[{audio_index}:a]aformat=sample_fmts=fltp:sample_rates={self.afreq}:channel_layouts=stereo,"
                     f"showwaves=mode=cline:draw=full:s=720x108:colors={self.wavecolor2}|{self.wavecolor}:rate={str(self.frate)},"
                     f"format=rgba,colorchannelmixer=aa=0.85,scale=1920:432:flags=fast_bilinear[auvis]"
                 ),
@@ -460,7 +482,7 @@ class MP3ToVideoConverter:
             3: (
                 # Top / bottom simultaneous visualization
                 (
-                    f"[{audio_index}:a]aformat=sample_fmts=fltp:sample_rates=44100:channel_layouts=stereo,"
+                    f"[{audio_index}:a]aformat=sample_fmts=fltp:sample_rates={self.afreq}:channel_layouts=stereo,"
                     f"showwaves=mode=cline:draw=full:s=720x108:colors={self.wavecolor}:rate={str(self.frate)},"
                     f"split[wave1][wave2];"
                     f"[wave1]crop=720:54:0:54[wave1_cropped];"
@@ -475,7 +497,7 @@ class MP3ToVideoConverter:
             4: (
                 # Alternative visualization using avectorscope 
                 (
-                    f"[{audio_index}:a]aformat=sample_fmts=fltp:sample_rates=44100:channel_layouts=stereo,"
+                    f"[{audio_index}:a]aformat=sample_fmts=fltp:sample_rates={self.afreq}:channel_layouts=stereo,"
                     f"avectorscope=mode=lissajous:swap=1:draw=line:s=720x720:rate={str(self.frate)},"
                     f"rotate=90*PI/180:oh=ow[auvis]"
                 ),
@@ -484,7 +506,7 @@ class MP3ToVideoConverter:
             5: (
                 # Circular projection visualization using GLSL shader
                 (
-                    f"[{audio_index}:a]aformat=sample_fmts=fltp:sample_rates=44100:channel_layouts=stereo,"
+                    f"[{audio_index}:a]aformat=sample_fmts=fltp:sample_rates={self.afreq}:channel_layouts=stereo,"
                     f"showwaves=mode=cline:draw=full:s=120x120:colors={self.wavecolor2}|{self.wavecolor}:split_channels=1:rate={str(self.frate)},"
                     f"scale=480:480:flags=fast_bilinear[wave],"
                     f"[wave]libplacebo=custom_shader_path=circle.glsl[auvis]"
@@ -496,7 +518,7 @@ class MP3ToVideoConverter:
         # Default configuration (vis_type 0) - Original visualization with geq
         default_config = (
             (
-                f"[{audio_index}:a]aformat=sample_fmts=fltp:sample_rates=44100:channel_layouts=stereo,"
+                f"[{audio_index}:a]aformat=sample_fmts=fltp:sample_rates={self.afreq}:channel_layouts=stereo,"
                 f"showwaves=mode=cline:draw=full:s=240x240:colors={self.wavecolor2}|{self.wavecolor}:split_channels=1:rate={str(self.frate)},"
                 f"geq='p(mod(W/PI*(PI+atan2(H/2-Y,X-W/2)),W), H-2*hypot(H/2-Y,X-W/2))':"
                 f"a='alpha(mod(W/PI*(PI+atan2(H/2-Y,X-W/2)),W), H-2*hypot(H/2-Y,X-W/2))',scale=480:480:flags=fast_bilinear[auvis]"
@@ -535,6 +557,7 @@ class MP3ToVideoConverter:
             '-pix_fmt', 'yuv420p',
             '-threads', '0',
             '-c:a', 'aac',
+            '-ar', str(self.afreq),
             '-strict', 'experimental',
             '-threads', '0',
             '-b:a', f'{self.arate}k',
@@ -602,6 +625,7 @@ class MP3ToVideoConverter:
             '-pix_fmt', 'yuv420p',
             '-threads', '0',
             '-c:a', 'aac',
+            '-ar', str(self.afreq),
             '-strict', 'experimental',
             '-threads', '0',
             '-b:a', f'{self.arate}k',
@@ -632,19 +656,23 @@ class MP3ToVideoConverter:
         print(f"Found {len(mp3_files)} MP3 files to process.")
         
         # Process in batches
-        for i in range(0, len(mp3_files), self.batch_size):
-            batch = mp3_files[i:i + self.batch_size]
-            existing_batches = len(self.processed_files) // self.batch_size
-            batch_index = existing_batches
-            
-            print(f"Processing batch {batch_index} with {len(batch)} tracks...")
-            
-            success = self.create_video_for_batch(batch, batch_index)
-            
-            if success:
-                print(f"Successfully created video for batch {batch_index}")
-            else:
-                print(f"Failed to create video for batch {batch_index}")
+        try:
+            for i in range(0, len(mp3_files), self.batch_size):
+                batch = mp3_files[i:i + self.batch_size]
+                existing_batches = len(self.processed_files) // self.batch_size
+                batch_index = existing_batches
+                
+                print(f"Processing batch {batch_index} with {len(batch)} tracks...")
+                
+                success = self.create_video_for_batch(batch, batch_index)
+                
+                if success:
+                    print(f"Successfully created video for batch {batch_index}")
+                else:
+                    print(f"Failed to create video for batch {batch_index}")
+        except KeyboardInterrupt:
+            print("\nProcess interrupted by user. Exiting gracefully...")
+            raise
         
         print("Processing complete.")
 
@@ -655,6 +683,7 @@ def main():
     parser.add_argument('--batch-size', type=int, default=25, help='Number of tracks per video (adequate max value is 30, default: 25)')
     parser.add_argument('--vrate', type=int, default=550, help='Out video bitrate in kbits (default: 550)')
     parser.add_argument('--arate', type=int, default=192, help='Audio bitrate in kbits out video (default: 192)')
+    parser.add_argument('--afreq', type=int, default=44100, help='Audio frequency in Hz for batch chunks (default: 44100)')
     parser.add_argument('--font', default='arial.ttf', help='Font file: default = arial.ttf')
     parser.add_argument('--shuffle', type=int, default=0, help='Set to 1 to shuffle input list.')
     parser.add_argument('--frate', type=int, default=30, help='Video framerate (default 30).')
@@ -691,9 +720,13 @@ def main():
         args.vis_type,
         args.test,
         args.wavecolor,
-        args.wavecolor2
+        args.wavecolor2,
+        args.afreq
     )
-    converter.process_all()
+    try:
+        converter.process_all()
+    except KeyboardInterrupt:
+        print("\nProcess interrupted by user. Exiting gracefully...")
 
 if __name__ == "__main__":
     main()
