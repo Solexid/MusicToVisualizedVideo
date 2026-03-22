@@ -20,7 +20,7 @@ class ConverterGUI:
     BG_DARK = "#1a1a2e"
     BG_MEDIUM = "#16213e"
     BG_LIGHT = "#0f3460"
-    ACCENT = "#8934a3"
+    ACCENT = "#97829e"
     ACCENT_HOVER = "#3D194A"
     START_BTN = "#27ae60"
     START_BTN_HOVER = "#2ecc71"
@@ -52,7 +52,6 @@ class ConverterGUI:
         self.converter = None
         self.processing = False
         self.stop_flag = False
-        
         self._create_widgets()
         self._load_settings()
     
@@ -69,10 +68,16 @@ class ConverterGUI:
         
         style.configure('TFrame', background=self.BG_DARK)
         style.configure('Main.TFrame', background=self.BG_DARK)
+        style.configure('Settings.TFrame', background=self.BG_MEDIUM)
         style.configure('TLabel',
             background=self.BG_DARK,
             foreground=self.TEXT_PRIMARY,
             font=('Segoe UI', 10)
+        )
+        style.configure('Settings.TLabel',
+            background=self.BG_MEDIUM,
+            foreground=self.TEXT_PRIMARY,
+            font=('Segoe UI', 9)
         )
         
         style.configure('TButton',
@@ -136,9 +141,19 @@ class ConverterGUI:
             foreground=self.TEXT_PRIMARY,
             font=('Segoe UI', 10)
         )
-        
+
         style.map('TCheckbutton',
             background=[('active', self.BG_DARK)]
+        )
+
+        style.configure('Settings.TCheckbutton',
+            background=self.BG_MEDIUM,
+            foreground=self.TEXT_PRIMARY,
+            font=('Segoe UI', 9)
+        )
+
+        style.map('Settings.TCheckbutton',
+            background=[('active', self.BG_MEDIUM)]
         )
         
         style.configure('Horizontal.TProgressbar',
@@ -175,13 +190,13 @@ class ConverterGUI:
         title_label.grid(row=0, column=0, columnspan=2, pady=(0, 10), sticky="w")
 
         # === LEFT COLUMN - Folders, Log ===
-        left_frame = tk.Frame(main_frame, bg=self.BG_DARK)
+        left_frame = ttk.Frame(main_frame, style='Main.TFrame')
         left_frame.grid(row=1, column=0, sticky="nsew", padx=(0, 6))
         left_frame.columnconfigure(0, weight=1)
         left_frame.rowconfigure(2, weight=1)
 
         # Input folder row
-        input_row = tk.Frame(left_frame, bg=self.BG_DARK)
+        input_row = ttk.Frame(left_frame, style='Main.TFrame')
         input_row.grid(row=0, column=0, sticky="ew", pady=4)
         input_row.columnconfigure(1, weight=1)
 
@@ -191,7 +206,7 @@ class ConverterGUI:
         ttk.Button(input_row, text="Browse...", command=self._browse_input).pack(side="right")
 
         # Output folder row
-        output_row = tk.Frame(left_frame, bg=self.BG_DARK)
+        output_row = ttk.Frame(left_frame, style='Main.TFrame')
         output_row.grid(row=1, column=0, sticky="ew", pady=4)
         output_row.columnconfigure(1, weight=1)
 
@@ -231,34 +246,34 @@ class ConverterGUI:
         s_row = 0
 
         # Top section - encoding settings
-        ttk.Label(settings_frame, text="Batch:").grid(row=s_row, column=0, sticky="e", pady=4, padx=(0, 10))
+        ttk.Label(settings_frame, text="Batch:", style='Settings.TLabel').grid(row=s_row, column=0, sticky="e", pady=4, padx=(0, 10))
         self.batch_size_var = tk.IntVar(value=25)
         ttk.Spinbox(settings_frame, from_=1, to=50, width=10, textvariable=self.batch_size_var, font=('Segoe UI', 9)).grid(row=s_row, column=1, sticky="w", padx=5)
         s_row += 1
 
-        ttk.Label(settings_frame, text="Video kbps:").grid(row=s_row, column=0, sticky="e", pady=4, padx=(0, 10))
+        ttk.Label(settings_frame, text="Video kbps:", style='Settings.TLabel').grid(row=s_row, column=0, sticky="e", pady=4, padx=(0, 10))
         self.vrate_var = tk.IntVar(value=550)
         ttk.Spinbox(settings_frame, from_=100, to=5000, width=10, textvariable=self.vrate_var, font=('Segoe UI', 9)).grid(row=s_row, column=1, sticky="w", padx=5)
         s_row += 1
 
-        ttk.Label(settings_frame, text="Audio kbps:").grid(row=s_row, column=0, sticky="e", pady=4, padx=(0, 10))
+        ttk.Label(settings_frame, text="Audio kbps:", style='Settings.TLabel').grid(row=s_row, column=0, sticky="e", pady=4, padx=(0, 10))
         self.arate_var = tk.IntVar(value=192)
         ttk.Spinbox(settings_frame, from_=64, to=512, width=10, textvariable=self.arate_var, font=('Segoe UI', 9)).grid(row=s_row, column=1, sticky="w", padx=5)
         s_row += 1
 
-        ttk.Label(settings_frame, text="FPS:").grid(row=s_row, column=0, sticky="e", pady=4, padx=(0, 10))
+        ttk.Label(settings_frame, text="FPS:", style='Settings.TLabel').grid(row=s_row, column=0, sticky="e", pady=4, padx=(0, 10))
         self.frate_var = tk.IntVar(value=30)
         ttk.Spinbox(settings_frame, from_=15, to=60, width=10, textvariable=self.frate_var, font=('Segoe UI', 9)).grid(row=s_row, column=1, sticky="w", padx=5)
         s_row += 1
 
-        ttk.Label(settings_frame, text="Codec:").grid(row=s_row, column=0, sticky="e", pady=4, padx=(0, 10))
+        ttk.Label(settings_frame, text="Codec:", style='Settings.TLabel').grid(row=s_row, column=0, sticky="e", pady=4, padx=(0, 10))
         self.codec_var = tk.StringVar(value='libx264')
         ttk.Entry(settings_frame, textvariable=self.codec_var, width=15, font=('Segoe UI', 9)).grid(row=s_row, column=1, sticky="w", padx=5)
         s_row += 1
 
-        ttk.Label(settings_frame, text="Shuffle:").grid(row=s_row, column=0, sticky="e", pady=4, padx=(0, 10))
+        ttk.Label(settings_frame, text="Shuffle:", style='Settings.TLabel').grid(row=s_row, column=0, sticky="e", pady=4, padx=(0, 10))
         self.shuffle_var = tk.BooleanVar(value=False)
-        ttk.Checkbutton(settings_frame, text="🔀 Shuffle tracks", variable=self.shuffle_var).grid(row=s_row, column=1, sticky="w", padx=5)
+        ttk.Checkbutton(settings_frame, text="🔀 Shuffle tracks", variable=self.shuffle_var, style='Settings.TCheckbutton').grid(row=s_row, column=1, sticky="w", padx=5)
         s_row += 1
 
         # Separator before visual settings
@@ -266,7 +281,7 @@ class ConverterGUI:
         s_row += 1
 
         # Visual settings section
-        ttk.Label(settings_frame, text="Visual:").grid(row=s_row, column=0, sticky="e", pady=4, padx=(0, 10))
+        ttk.Label(settings_frame, text="Visual:", style='Settings.TLabel').grid(row=s_row, column=0, sticky="e", pady=4, padx=(0, 10))
         self.vis_type_var = tk.IntVar(value=0)
         self.vis_combo = ttk.Combobox(settings_frame, values=[n for n, _ in self.VISUALIZATION_TYPES], width=20, state="readonly", font=('Segoe UI', 9))
         self.vis_combo.current(0)
@@ -275,15 +290,15 @@ class ConverterGUI:
         s_row += 1
 
         # Colors - stacked vertically
-        color_frame = tk.Frame(settings_frame, bg=self.BG_MEDIUM)
+        color_frame = ttk.Frame(settings_frame, style='Settings.TFrame')
         color_frame.grid(row=s_row, column=0, columnspan=2, sticky="w", pady=5)
         s_row += 1
         
-        ttk.Label(color_frame, text="Color 1:").grid(row=0, column=0, sticky="e", pady=2, padx=(0, 10))
+        ttk.Label(color_frame, text="Color 1:", style='Settings.TLabel').grid(row=0, column=0, sticky="e", pady=2, padx=(0, 10))
         self.wavecolor_var = tk.StringVar()
         ttk.Entry(color_frame, textvariable=self.wavecolor_var, width=10, font=('Segoe UI', 8)).grid(row=0, column=1, padx=0)
         
-        ttk.Label(color_frame, text="Color 2:").grid(row=1, column=0, sticky="e", pady=2, padx=(0, 10))
+        ttk.Label(color_frame, text="Color 2:", style='Settings.TLabel').grid(row=1, column=0, sticky="e", pady=2, padx=(0, 10))
         self.wavecolor2_var = tk.StringVar(value="0x9400D3")
         ttk.Entry(color_frame, textvariable=self.wavecolor2_var, width=10, font=('Segoe UI', 8)).grid(row=1, column=1, padx=0)
 
@@ -293,22 +308,22 @@ class ConverterGUI:
 
         # Test mode - alone in bottom section
         self.test_mode_var = tk.BooleanVar(value=False)
-        ttk.Checkbutton(settings_frame, text="🧪 Test Mode", variable=self.test_mode_var, command=self._toggle_test_duration).grid(row=s_row, column=0, columnspan=2, sticky="w", pady=5)
+        ttk.Checkbutton(settings_frame, text="🧪 Test Mode", variable=self.test_mode_var, command=self._toggle_test_duration, style='Settings.TCheckbutton').grid(row=s_row, column=0, columnspan=2, sticky="w", pady=5)
         s_row += 1
 
-        test_frame = tk.Frame(settings_frame, bg=self.BG_MEDIUM)
+        test_frame = ttk.Frame(settings_frame, style='Settings.TFrame')
         test_frame.grid(row=s_row, column=0, columnspan=2, sticky="w", pady=5, padx=(100, 0))
-        ttk.Label(test_frame, text="Duration (sec):").pack(side="left")
+        ttk.Label(test_frame, text="Duration (sec):", style='Settings.TLabel').pack(side="left")
         self.test_duration_var = tk.IntVar(value=60)
         self.test_duration_spinbox = ttk.Spinbox(test_frame, from_=10, to=300, width=6, textvariable=self.test_duration_var, state="disabled", font=('Segoe UI', 8))
         self.test_duration_spinbox.pack(side="left", padx=(5, 0))
 
         # === BOTTOM SECTION - Progress + Buttons ===
-        bottom_frame = tk.Frame(main_frame, bg=self.BG_DARK)
+        bottom_frame = ttk.Frame(main_frame, style='Main.TFrame')
         bottom_frame.grid(row=2, column=0, columnspan=2, pady=(10, 15), padx=10)
         
         # Progress bar - full width
-        progress_bottom = tk.Frame(bottom_frame, bg=self.BG_DARK)
+        progress_bottom = ttk.Frame(bottom_frame, style='Main.TFrame')
         progress_bottom.pack(fill=tk.X, pady=(0, 10))
         
         self.progress_var = tk.DoubleVar()
@@ -319,7 +334,7 @@ class ConverterGUI:
         ttk.Label(progress_bottom, textvariable=self.status_var, font=('Segoe UI', 10, 'italic')).pack(anchor="w", pady=(3, 0))
         
         # Buttons
-        button_frame = tk.Frame(bottom_frame, bg=self.BG_DARK)
+        button_frame = ttk.Frame(bottom_frame, style='Main.TFrame')
         button_frame.pack()
 
         self.start_button = ttk.Button(button_frame, text="▶ Start", style='Start.TButton', command=self._start_processing)
