@@ -11,6 +11,7 @@ import chardet
 import math
 import random
 from tqdm import tqdm
+from viz_filters import VisualizationFilters
 
 class MP3ToVideoConverter:
     def __init__(self, input_folder, output_folder, batch_size=25, arate=192, vrate=550, font='arial.ttf', shuffle=0, frate=30,codec = 'libx264', vis_type=0, test=False, wavecolor=None, wavecolor2=None, afreq=44100):
@@ -26,6 +27,10 @@ class MP3ToVideoConverter:
         self.codec = codec
         self.vis_type = vis_type
         self.test = test
+        self.test_duration = 60 if test else None
+        # If test is a number, use it as the test duration
+        if isinstance(test, (int, float)) and test > 0:
+            self.test_duration = test
         self.afreq = afreq
         self.processed_files = []
         self.to_process_files = []
@@ -36,7 +41,16 @@ class MP3ToVideoConverter:
         self.wavecolor2 = wavecolor2 if wavecolor2 else "0x9400D3"
         # Create output folder if it doesn't exist
         self.output_folder.mkdir(exist_ok=True)
-        
+
+        # Initialize visualization filters
+        self.viz_filters = VisualizationFilters(
+            vis_type=vis_type,
+            frate=frate,
+            afreq=afreq,
+            wavecolor=self.wavecolor,
+            wavecolor2=self.wavecolor2
+        )
+
         # Load processed files list if exists
         self.processed_list_file = self.output_folder / "processed_files.json"
         if self.processed_list_file.exists():
@@ -267,7 +281,7 @@ class MP3ToVideoConverter:
         # Create temporary directory for intermediate files
         # In test mode, preserve temp dir so files aren't cleaned up if stopped
         temp_dir_context = None
-        if self.test:
+        if self.test_duration:
             temp_dir = tempfile.mkdtemp(dir=self.output_folder)
             temp_path = Path(temp_dir)
             print(f"Test mode: Temp directory preserved at {temp_path}")
@@ -444,107 +458,23 @@ class MP3ToVideoConverter:
             draw.text((100, 100), f"{metadata['title'][:30]} - {metadata['album_artist'][:30]}", fill=(255, 255, 255))
             image.save(output_path)
             return False
-    
-    def _create_audio_visualization_filter(self, has_lyrics=False):
-        """Create and return the audio visualization filter complex and overlay string.
 
-        Args:
-            has_lyrics: Whether lyrics are being used (affects audio stream index)
-
-        Returns a tuple: (filter_complex_part, overlay_expression)
-        where filter_complex_part produces [auvis] and overlay_expression is the overlay
-        placement string to be appended in the overall filter_complex.
-        """
-        # Audio stream index depends on whether lyrics are used
-        audio_index = 2 if has_lyrics else 1
-
-        # Dictionary mapping visualization types to their filter configurations
-        vis_configs = {
-
-            1: (
-                # Alternative visualization without geq
-                (
-                    f"[{audio_index}:a]aformat=sample_fmts=fltp:sample_rates={self.afreq}:channel_layouts=stereo,"
-                    f"showwaves=mode=cline:draw=full:s=240x240:colors={self.wavecolor2}|{self.wavecolor}:rate={str(self.frate)},"
-                    f"scale=480:480:flags=fast_bilinear[auvis]"
-                ),
-                "[0:v][auvis]overlay=x=720:y=600[outv]"
-            ),
-            2: (
-                # Full-width bottom visualization (10% height)
-                (
-                    f"[{audio_index}:a]aformat=sample_fmts=fltp:sample_rates={self.afreq}:channel_layouts=stereo,"
-                    f"showwaves=mode=cline:draw=full:s=720x108:colors={self.wavecolor2}|{self.wavecolor}:rate={str(self.frate)},"
-                    f"format=rgba,colorchannelmixer=aa=0.85,scale=1920:432:flags=fast_bilinear[auvis]"
-                ),
-                "[0:v][auvis]overlay=x=0:y=864[outv]"
-            ),
-            3: (
-                # Top / bottom simultaneous visualization
-                (
-                    f"[{audio_index}:a]aformat=sample_fmts=fltp:sample_rates={self.afreq}:channel_layouts=stereo,"
-                    f"showwaves=mode=cline:draw=full:s=720x108:colors={self.wavecolor}:rate={str(self.frate)},"
-                    f"split[wave1][wave2];"
-                    f"[wave1]crop=720:54:0:54[wave1_cropped];"
-                    f"[wave2]crop=720:54:0:0[wave2_cropped];"
-                    f"[wave1_cropped]pad=720:216:0:0:color=0x00000000[wave1_padded];"
-                    f"[wave2_cropped]pad=720:216:0:162:color=0x00000000[wave2_padded];"
-                    f"[wave1_padded][wave2_padded]vstack[temp_screen];"
-                    f"[temp_screen]format=rgba,colorchannelmixer=aa=0.85,scale=1920:1080:flags=fast_bilinear[auvis]"
-                ),
-                "[0:v][auvis]overlay=x=0:y=0[outv]"
-            ),
-            4: (
-                # Alternative visualization using avectorscope 
-                (
-                    f"[{audio_index}:a]aformat=sample_fmts=fltp:sample_rates={self.afreq}:channel_layouts=stereo,"
-                    f"avectorscope=mode=lissajous:swap=1:draw=line:s=720x720:rate={str(self.frate)},"
-                    f"rotate=90*PI/180:oh=ow[auvis]"
-                ),
-                "[0:v][auvis]overlay=x=600:y=440[outv]"
-            ),
-            5: (
-                # Circular projection visualization using GLSL shader
-                (
-                    f"[{audio_index}:a]aformat=sample_fmts=fltp:sample_rates={self.afreq}:channel_layouts=stereo,"
-                    f"showwaves=mode=cline:draw=full:s=120x120:colors={self.wavecolor2}|{self.wavecolor}:split_channels=1:rate={str(self.frate)},"
-                    f"scale=480:480:flags=fast_bilinear[wave],"
-                    f"[wave]libplacebo=custom_shader_path=circle.glsl[auvis]"
-                ),
-                "[0:v][auvis]overlay=x=720:y=600[outv]"
-            ),
-        }
-
-        # Default configuration (vis_type 0) - Original visualization with geq
-        default_config = (
-            (
-                f"[{audio_index}:a]aformat=sample_fmts=fltp:sample_rates={self.afreq}:channel_layouts=stereo,"
-                f"showwaves=mode=cline:draw=full:s=240x240:colors={self.wavecolor2}|{self.wavecolor}:split_channels=1:rate={str(self.frate)},"
-                f"geq='p(mod(W/PI*(PI+atan2(H/2-Y,X-W/2)),W), H-2*hypot(H/2-Y,X-W/2))':"
-                f"a='alpha(mod(W/PI*(PI+atan2(H/2-Y,X-W/2)),W), H-2*hypot(H/2-Y,X-W/2))',scale=480:480:flags=fast_bilinear[auvis]"
-            ),
-            "[0:v][auvis]overlay=x=720:y=600[outv]"
-        )
-
-        # Switch-case using dictionary get method
-        return vis_configs.get(self.vis_type, default_config)
-    
     def create_video_segment(self, metadata, image_path, output_path):
         """Create a video segment for a single track without lyrics"""
 
         print(f" Processing  : {metadata['title']}")
 
         duration = metadata['duration']
-        
-        # In test mode, limit to 60 seconds
-        if self.test:
-            duration = min(duration, 60)
-        
+
+        # In test mode, limit duration
+        if self.test_duration:
+            duration = min(duration, self.test_duration)
+
         # Create filter complex for audio visualization (filter part and overlay)
         # No lyrics, so audio is at index 1
-        auvis_filter_part, auvis_overlay = self._create_audio_visualization_filter(has_lyrics=False)
+        auvis_filter_part, auvis_overlay = self.viz_filters._create_audio_visualization_filter(has_lyrics=False)
         filter_complex = f"{auvis_filter_part};{auvis_overlay}"
-        
+
         cmd = [
             'ffmpeg',
             '-filter_complex_threads', '0',
@@ -568,7 +498,7 @@ class MP3ToVideoConverter:
             str(output_path),
             '-y'
         ]
-        
+
         try:
             self.run_ffmpeg_command(cmd)
             return True
@@ -582,17 +512,17 @@ class MP3ToVideoConverter:
         print(f" Processing with lyrics : {metadata['title']}")
 
         duration = metadata['duration']
-       
-        # In test mode, limit to 60 seconds
-        if self.test:
-            duration = min(duration, 60)
-        
+
+        # In test mode, limit duration
+        if self.test_duration:
+            duration = min(duration, self.test_duration)
+
         # Calculate scroll speed (pixels per second)
         scroll_speed = (lyrics_height + 1080) / duration
-        
+
         # Create audio visualization filter (filter part and overlay)
         # Has lyrics, so audio is at index 2
-        auvis_filter_part, auvis_overlay = self._create_audio_visualization_filter(has_lyrics=True)
+        auvis_filter_part, auvis_overlay = self.viz_filters._create_audio_visualization_filter(has_lyrics=True)
 
         # Create a complex filter for scrolling lyrics. The auvis_overlay is expected to
         # reference [auvis] and combine it with the main video; for the lyrics case we
@@ -611,7 +541,7 @@ class MP3ToVideoConverter:
             f"[0:v][lyrics]overlay=x=1270:y='if(gte(t,0), (H)-{scroll_speed}*t, 0)':shortest=1,fps={str(self.frate)}[lurv];"
             f"{auvis_overlay_for_lyrics}"
         )
-        
+
         cmd = [
             'ffmpeg',
             '-filter_complex_threads', '0',
@@ -636,7 +566,7 @@ class MP3ToVideoConverter:
             str(output_path),
             '-y'
         ]
-        
+
         try:
             self.run_ffmpeg_command(cmd)
             return True
@@ -694,7 +624,7 @@ def main():
     ' 3 for top/bottom simultaneous visualization,' \
     ' 4 - avectorscope,' \
     ' 5 - circular projection with GLSL shader. (default: 0)')
-    parser.add_argument('--test', action='store_true', help='Run in test mode - process only 60 seconds of each track')
+    parser.add_argument('--test', nargs='?', const=60, type=float, default=False, help='Run in test mode - process only 60 seconds of each track (default). Optionally specify duration in seconds, e.g. --test 30')
     parser.add_argument('--wavecolor', help='Wave color in hex or from ffmpeg color table (default: album art dominant color)')
     parser.add_argument('--wavecolor2', help='Secondary wave color in hex or from ffmpeg color table (default: 0x9400D3)')
     args = parser.parse_args()
