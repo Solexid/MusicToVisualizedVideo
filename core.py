@@ -178,33 +178,36 @@ class MP3ToVideoConverter:
         try:
             audio = MP3(mp3_path)
             tags = ID3(mp3_path)
-            
+
             title = self.get_id3_tag(tags, "TIT2", Path(mp3_path).stem)
             artist = self.get_id3_tag(tags, "TPE1", "Unknown Artist")
             album_artist = self.get_id3_tag(tags, "TPE2", artist)
             album = self.get_id3_tag(tags, "TALB", "Unknown Album")
-            
+            genre = self.get_id3_tag(tags, "TCON", "")
+
             album_art = None
             for tag in tags.values():
                 if hasattr(tag, 'mime') and tag.mime.startswith('image/'):
                     album_art = tag.data
                     break
-            
+
             lyrics = self.find_lyrics_tag(tags)
-            
+
             title, _ = self.detect_encoding(title)
             artist, _ = self.detect_encoding(artist)
             album_artist, _ = self.detect_encoding(album_artist)
             album, _ = self.detect_encoding(album)
-            
+            genre, _ = self.detect_encoding(genre)
+
             if lyrics:
                 lyrics, _ = self.detect_encoding(lyrics)
-            
+
             return {
                 'title': title,
                 'artist': artist,
                 'album_artist': album_artist,
                 'album': album,
+                'genre': genre,
                 'duration': audio.info.length,
                 'album_art': album_art,
                 'lyrics': lyrics,
@@ -485,37 +488,58 @@ class MP3ToVideoConverter:
                 # Convert main image to RGBA for compositing
                 image_rgba = image.convert('RGBA')
                 art_x = (width - art_size) // 2
-                art_y = 100
+                art_y = 80
                 
                 # Paste with alpha
                 image_rgba.paste(album_art_rounded, (art_x, art_y), album_art_rounded)
                 image = image_rgba
-            
+                draw = ImageDraw.Draw(image)  # Recreate draw for RGBA image
+
             title_text = metadata['title'][:50]
-            artist_text = f"{metadata['album_artist']} - {metadata['album']}"[:70]
+            artist_text = metadata['artist'][:50]
+            album_text = metadata['album'][:50]
+            genre_text = metadata.get('genre', '')
             
+            # Calculate text positions (below album art)
+            text_start_y = 520  # Below album art (80 + 400 + 40)
+
+            # Draw title (largest, centered)
             if hasattr(draw, 'textbbox'):
                 title_bbox = draw.textbbox((0, 0), title_text, font=title_font)
-                artist_bbox = draw.textbbox((0, 0), artist_text, font=info_font)
                 title_width = title_bbox[2] - title_bbox[0]
-                artist_width = artist_bbox[2] - artist_bbox[0]
             else:
                 title_width = draw.textlength(title_text, font=title_font)
-                artist_width = draw.textlength(artist_text, font=info_font)
-            
             title_x = (width - title_width) // 2
-            title_y = 550 if album_art_path else 100
-
-            self._draw_text_with_outline(draw, (title_x, title_y), title_text, 
+            self._draw_text_with_outline(draw, (title_x, text_start_y), title_text,
                                          title_font, fill=(255, 255, 255),
                                          outline=text_outline, outline_width=3)
 
+            # Draw artist name
+            if hasattr(draw, 'textbbox'):
+                artist_bbox = draw.textbbox((0, 0), artist_text, font=info_font)
+                artist_width = artist_bbox[2] - artist_bbox[0]
+            else:
+                artist_width = draw.textlength(artist_text, font=info_font)
             artist_x = (width - artist_width) // 2
-            artist_y = title_y + 50
-
-            self._draw_text_with_outline(draw, (artist_x, artist_y), artist_text,
-                                         info_font, fill=(200, 200, 200),
+            self._draw_text_with_outline(draw, (artist_x, text_start_y + 50), artist_text,
+                                         info_font, fill=(255, 255, 255),
                                          outline=text_outline, outline_width=2)
+
+            # Draw album and genre info
+            info_text = f"{album_text}" if album_text else ""
+            if genre_text:
+                info_text += f" | {genre_text}" if info_text else f"{genre_text}"
+            
+            if info_text:
+                if hasattr(draw, 'textbbox'):
+                    info_bbox = draw.textbbox((0, 0), info_text, font=list_font)
+                    info_width = info_bbox[2] - info_bbox[0]
+                else:
+                    info_width = draw.textlength(info_text, font=list_font)
+                info_x = (width - info_width) // 2
+                self._draw_text_with_outline(draw, (info_x, text_start_y + 95), info_text,
+                                             list_font, fill=(180, 180, 180),
+                                             outline=text_outline, outline_width=1)
             
             # Convert back to RGB for saving
             image = image.convert('RGB')
@@ -524,7 +548,9 @@ class MP3ToVideoConverter:
 
         except Exception as e:
             self._log(f"Error creating background image: {e}")
-            draw.text((100, 100), f"{metadata['title'][:30]} - {metadata['album_artist'][:30]}", fill=(255, 255, 255))
+            image = image.convert('RGB')
+            draw = ImageDraw.Draw(image)
+            draw.text((100, 100), f"{metadata['title'][:30]} - {metadata['artist'][:30]}", fill=(255, 255, 255))
             image.save(output_path, 'JPEG', quality=95)
             return False
     
