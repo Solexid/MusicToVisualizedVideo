@@ -233,10 +233,7 @@ class MP3ToVideoConverter:
     def create_lyrics_image(self, lyrics_text, output_path, width=600, font_size=25):
         """Create a long image with lyrics that can be scrolled."""
         try:
-            try:
-                font = ImageFont.truetype(self.font, font_size)
-            except:
-                font = ImageFont.load_default()
+            font = self._get_font(self.font, font_size, bold=True)
             
             paragraphs = lyrics_text.split('\n')
             lines = []
@@ -324,36 +321,86 @@ class MP3ToVideoConverter:
             self._current_ffmpeg_process = None
             raise
     
+    def _get_font(self, font_path, size, bold=False):
+        """Get font with optional bold weight."""
+        try:
+            # Try loading as bold first (append 'b' to filename or use bold variant)
+            if bold:
+                # Try common bold font patterns
+                bold_variants = [
+                    font_path.replace('.ttf', 'b.ttf'),
+                    font_path.replace('.ttf', 'Bd.ttf'),
+                    font_path.replace('.ttf', 'Bold.ttf'),
+                    font_path.replace('.TTF', 'B.TTF'),
+                ]
+                for bold_path in bold_variants:
+                    if bold_path != font_path:
+                        try:
+                            return ImageFont.truetype(bold_path, size)
+                        except:
+                            pass
+                
+                # Try loading with weight parameter (PIL 10+)
+                try:
+                    return ImageFont.truetype(font_path, size, weight='bold')
+                except TypeError:
+                    pass
+            
+            return ImageFont.truetype(font_path, size)
+        except:
+            return ImageFont.load_default()
+
+    def _draw_text_with_outline(self, draw, position, text, font, fill, outline=None, outline_width=2):
+        """Draw text with optional outline (shadow effect)."""
+        x, y = position
+        if outline:
+            # Draw outline by drawing text at offsets around the center
+            for dx in range(-outline_width, outline_width + 1):
+                for dy in range(-outline_width, outline_width + 1):
+                    if dx != 0 or dy != 0:
+                        draw.text((x + dx, y + dy), text, font=font, fill=outline)
+        # Draw main text
+        draw.text((x, y), text, font=font, fill=fill)
+
     def create_background_image(self, metadata, output_path, album_art_path=None,
                                 track_list_file=None, current_track_index=0):
         """Create background image with track info and track list (without lyrics)."""
         width, height = 1920, 1080
         image = Image.new('RGB', (width, height), color=(0, 0, 0))
         draw = ImageDraw.Draw(image)
-        
+
         try:
             try:
-                title_font = ImageFont.truetype(self.font, 40)
-                info_font = ImageFont.truetype(self.font, 30)
-                list_font = ImageFont.truetype(self.font, 20)
-                highlight_font = ImageFont.truetype(self.font, 22)
+                title_font = self._get_font(self.font, 40, bold=True)
+                info_font = self._get_font(self.font, 30, bold=True)
+                list_font = self._get_font(self.font, 20)
+                highlight_font = self._get_font(self.font, 24, bold=True)  # 2px larger for current track
             except:
                 title_font = ImageFont.load_default()
                 info_font = ImageFont.load_default()
                 list_font = ImageFont.load_default()
                 highlight_font = ImageFont.load_default()
-            
+
+            # Outline color for text
+            text_outline = (55, 55, 55)  # Black outline
+
             if track_list_file and track_list_file.exists():
                 with open(track_list_file, 'r', encoding='utf-8') as f:
                     tracks = f.readlines()
-                
+
                 list_x = 50
                 list_y = 100
                 for i, track in enumerate(tracks):
+                    track_text = track.strip()
                     if i == current_track_index:
-                        draw.text((list_x, list_y), track.strip(), font=highlight_font, fill=(255, 255, 0))
+                        # Highlight current track with larger font and outline
+                        self._draw_text_with_outline(draw, (list_x, list_y), track_text, 
+                                                     highlight_font, fill=(255, 255, 0), 
+                                                     outline=text_outline, outline_width=2)
                     else:
-                        draw.text((list_x, list_y), track.strip(), font=list_font, fill=(150, 150, 150))
+                        self._draw_text_with_outline(draw, (list_x, list_y), track_text,
+                                                     list_font, fill=(150, 150, 150),
+                                                     outline=text_outline, outline_width=1)
                     list_y += 30
             
             if album_art_path and album_art_path.exists():
@@ -378,13 +425,17 @@ class MP3ToVideoConverter:
             
             title_x = (width - title_width) // 2
             title_y = 550 if album_art_path else 100
-            
-            draw.text((title_x, title_y), title_text, font=title_font, fill=(255, 255, 255))
-            
+
+            self._draw_text_with_outline(draw, (title_x, title_y), title_text, 
+                                         title_font, fill=(255, 255, 255),
+                                         outline=text_outline, outline_width=3)
+
             artist_x = (width - artist_width) // 2
             artist_y = title_y + 50
-            
-            draw.text((artist_x, artist_y), artist_text, font=info_font, fill=(200, 200, 200))
+
+            self._draw_text_with_outline(draw, (artist_x, artist_y), artist_text,
+                                         info_font, fill=(200, 200, 200),
+                                         outline=text_outline, outline_width=2)
             
             image.save(output_path)
             return True
