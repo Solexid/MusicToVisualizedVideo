@@ -219,14 +219,14 @@ class MP3ToVideoConverter:
         try:
             with open(output_path, 'wb') as f:
                 f.write(album_art_data)
-            
+
             img = Image.open(output_path)
             resized_img = img.resize((1, 1), Image.BICUBIC)
             r, g, b = resized_img.convert('RGB').getpixel((0, 0))
             if self.is_wavecolor_generate:
                 self.wavecolor = f"0x{r:02x}{g:02x}{b:02x}"
             img = img.resize(size, Image.LANCZOS)
-            img.save(output_path)
+            img.save(output_path, 'JPEG', quality=95)
             return True
         except Exception as e:
             self._log(f"Error creating album art: {e}")
@@ -519,13 +519,13 @@ class MP3ToVideoConverter:
             
             # Convert back to RGB for saving
             image = image.convert('RGB')
-            image.save(output_path)
+            image.save(output_path, 'JPEG', quality=95)
             return True
-        
+
         except Exception as e:
             self._log(f"Error creating background image: {e}")
             draw.text((100, 100), f"{metadata['title'][:30]} - {metadata['album_artist'][:30]}", fill=(255, 255, 255))
-            image.save(output_path)
+            image.save(output_path, 'JPEG', quality=95)
             return False
     
     def create_video_segment(self, metadata, image_path, output_path):
