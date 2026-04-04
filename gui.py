@@ -42,7 +42,7 @@ class ConverterGUI:
     def __init__(self, root):
         self.root = root
         self.root.title("Music To Visualized Video")
-        self.root.geometry("900x650")
+        self.root.geometry("900x720")
         self.root.minsize(800, 580)
         self.root.configure(bg=self.BG_DARK)
         
@@ -294,6 +294,19 @@ class ConverterGUI:
         ttk.Button(bg_frame, text="Browse...", command=self._browse_background, width=8).grid(row=0, column=1)
         s_row += 1
 
+        ttk.Label(settings_frame, text="Sort by:", style='Settings.TLabel').grid(row=s_row, column=0, sticky="e", pady=4, padx=(0, 10))
+        self.sort_type_var = tk.StringVar(value="None (default)")
+        sort_combo = ttk.Combobox(settings_frame, textvariable=self.sort_type_var, width=18, state="readonly", font=('Segoe UI', 9))
+        sort_combo['values'] = [
+            "None (default)",
+            "Genre → Album → Artist",
+            "Album → Artist",
+            "Artist → Album"
+        ]
+        sort_combo.current(0)
+        sort_combo.grid(row=s_row, column=1, sticky="ew", padx=5)
+        s_row += 1
+
         # Separator before visual settings
         ttk.Separator(settings_frame, orient='horizontal').grid(row=s_row, column=0, columnspan=2, sticky="ew", pady=8)
         s_row += 1
@@ -493,6 +506,15 @@ class ConverterGUI:
         try:
             test_value = self.test_duration_var.get() if self.test_mode_var.get() else False
             
+            # Map sort type from GUI text to backend value
+            sort_map = {
+                "None (default)": "none",
+                "Genre → Album → Artist": "genre",
+                "Album → Artist": "album",
+                "Artist → Album": "artist"
+            }
+            sort_type = sort_map.get(self.sort_type_var.get(), "none")
+            
             self.converter = MP3ToVideoConverter(
                 input_folder=self.input_var.get(),
                 output_folder=self.output_var.get(),
@@ -510,7 +532,8 @@ class ConverterGUI:
                 progress_callback=self._update_progress,
                 log_callback=self._log,
                 use_tqdm=False,
-                background=self.background_var.get() if self.background_var.get() else None
+                background=self.background_var.get() if self.background_var.get() else None,
+                sort_type=sort_type
             )
             
             self.converter.process_all()

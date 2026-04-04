@@ -23,7 +23,8 @@ class MP3ToVideoConverter:
     def __init__(self, input_folder, output_folder, batch_size=25, arate=192, vrate=550,
                  font='arial.ttf', shuffle=0, frate=30, codec='libx264', vis_type=0,
                  test=False, wavecolor=None, wavecolor2=None, afreq=44100,
-                 progress_callback=None, log_callback=None, use_tqdm=True, background=None):
+                 progress_callback=None, log_callback=None, use_tqdm=True, background=None,
+                 sort_type='none'):
         """
         Initialize the converter.
 
@@ -46,6 +47,7 @@ class MP3ToVideoConverter:
             log_callback: Optional callback for log messages
             use_tqdm: Use tqdm progress bar in CLI (default: True)
             background: Background image path or hex color (None = use album art)
+            sort_type: Sorting mode - 'none', 'genre', 'album', 'artist'
         """
         self.input_folder = Path(input_folder)
         self.output_folder = Path(output_folder)
@@ -65,6 +67,7 @@ class MP3ToVideoConverter:
         self.afreq = afreq
         self.processed_files = []
         self.background = background  # None = album art, path = image, hex = color
+        self.sort_type = sort_type  # 'none', 'genre', 'album', 'artist'
         self.to_process_files = []
         self.use_tqdm = use_tqdm and not progress_callback  # Don't use tqdm if GUI callback is provided
         
@@ -129,13 +132,98 @@ class MP3ToVideoConverter:
     def get_mp3_files(self):
         """Get all MP3 files from input folder that haven't been processed yet."""
         all_mp3s = list(self.input_folder.glob("*.mp3"))
+        self._log(f"Found {len(all_mp3s)} MP3 files in input folder")
+
         if self.shuffle != 0:
             random.shuffle(all_mp3s)
+            self._log("Tracks shuffled randomly")
+        elif self.sort_type != 'none':
+            self._log(f"Sorting tracks by: {self.sort_type}")
+            # Sort by metadata
+            metadata_cache = {}
+            for mp3_path in all_mp3s:
+                try:
+                    tags = ID3(str(mp3_path))
+                    genre = self.get_id3_tag(tags, "TCON", "")
+                    album = self.get_id3_tag(tags, "TALB", "")
+                    artist = self.get_id3_tag(tags, "TPE1", "")
+
+                    genre, _ = self.detect_encoding(genre)
+                    album, _ = self.detect_encoding(album)
+                    artist, _ = self.detect_encoding(artist)
+
+                    # Debug: log first few files
+                    if len(metadata_cache) < 3:
+                        self._log(f"  {Path(mp3_path).name}: G='{genre}' A='{album}' AR='{artist}'")
+
+                    metadata_cache[str(mp3_path)] = {
+                        'genre': genre.lower().strip(),
+                        'album': album.lower().strip(),
+                        'artist': artist.lower().strip()
+                    }
+                except Exception as e:
+                    self._log(f"  [WARN] Could not read metadata for {Path(mp3_path).name}: {e}")
+                    metadata_cache[str(mp3_path)] = {
+                        'genre': '',
+                        'album': '',
+                        'artist': str(mp3_path).lower()
+                    }
+
+            if self.sort_type == 'genre':
+                # Sort by genre → album → artist
+                self._log("  Sorting keys (genre, album, artist):")
+                for f in all_mp3s[:5]:
+                    key = str(f)
+                    meta = metadata_cache.get(key, {})
+                    self._log(f"    {Path(f).name}: ('{meta.get('genre','')}', '{meta.get('album','')}', '{meta.get('artist','')}')")
+                
+                all_mp3s.sort(key=lambda x: (
+                    metadata_cache.get(str(x), {}).get('genre', ''),
+                    metadata_cache.get(str(x), {}).get('album', ''),
+                    metadata_cache.get(str(x), {}).get('artist', '')
+                ))
+                self._log("  Sorted by: Genre → Album → Artist")
+            elif self.sort_type == 'album':
+                # Sort by album → artist
+                self._log("  Sorting keys (album, artist):")
+                for f in all_mp3s[:5]:
+                    key = str(f)
+                    meta = metadata_cache.get(key, {})
+                    self._log(f"    {Path(f).name}: ('{meta.get('album','')}', '{meta.get('artist','')}')")
+                
+                all_mp3s.sort(key=lambda x: (
+                    metadata_cache.get(str(x), {}).get('album', ''),
+                    metadata_cache.get(str(x), {}).get('artist', '')
+                ))
+                self._log("  Sorted by: Album → Artist")
+            elif self.sort_type == 'artist':
+                # Sort by artist → album
+                self._log("  Sorting keys (artist, album):")
+                for f in all_mp3s[:5]:
+                    key = str(f)
+                    meta = metadata_cache.get(key, {})
+                    self._log(f"    {Path(f).name}: ('{meta.get('artist','')}', '{meta.get('album','')}')")
+                
+                all_mp3s.sort(key=lambda x: (
+                    metadata_cache.get(str(x), {}).get('artist', ''),
+                    metadata_cache.get(str(x), {}).get('album', '')
+                ))
+                self._log("  Sorted by: Artist → Album")
+            
+            # Debug: log first 3 files after sorting
+            self._log("  First 5 files AFTER sorting:")
+            for f in all_mp3s[:5]:
+                key = str(f)
+                meta = metadata_cache.get(key, {})
+                self._log(f"    {Path(f).name}")
+
         self.to_process_files = [str(f) for f in all_mp3s if str(f) not in self.processed_files]
+        self._log(f"Files to process: {len(self.to_process_files)} (skipping {len(all_mp3s) - len(self.to_process_files)} already processed)")
         return self.to_process_files
     
     def get_id3_tag(self, tags, tag_name, default="Unknown"):
-        """Extract ID3 tag value safely."""
+        """Extract ID3 tag value safely, searching by tag prefix."""
+        # First try exact match
         try:
             if tag_name in tags:
                 value = tags[tag_name]
@@ -144,6 +232,18 @@ class MP3ToVideoConverter:
                 return str(value)
         except:
             pass
+        
+        # Then try prefix match (handles TCON:English, TCON:0, etc.)
+        try:
+            for tag in tags.keys():
+                if tag.startswith(tag_name + ':') or tag.startswith(tag_name + '\x00'):
+                    value = tags[tag]
+                    if isinstance(value, list) and len(value) > 0:
+                        value = value[0]
+                    return str(value)
+        except:
+            pass
+        
         return default
     
     def find_lyrics_tag(self, tags):

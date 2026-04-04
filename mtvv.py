@@ -56,6 +56,8 @@ def main():
                         help='Secondary wave color in hex or from ffmpeg color table (default: 0x9400D3)')
     parser.add_argument('--background',
                         help='Background image path or hex color (default: blurred album art)')
+    parser.add_argument('--sort', choices=['none', 'genre', 'album', 'artist'], default='none',
+                        help='Sort tracks by: none (default), genre→album→artist, album→artist, or artist→album')
     
     args = parser.parse_args()
     
@@ -80,7 +82,8 @@ def main():
         wavecolor2=args.wavecolor2,
         afreq=args.afreq,
         use_tqdm=True,
-        background=args.background
+        background=args.background,
+        sort_type=args.sort
     )
     
     try:
