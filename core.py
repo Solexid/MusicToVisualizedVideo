@@ -184,6 +184,9 @@ class MP3ToVideoConverter:
             album_artist = self.get_id3_tag(tags, "TPE2", artist)
             album = self.get_id3_tag(tags, "TALB", "Unknown Album")
             genre = self.get_id3_tag(tags, "TCON", "")
+            year = self.get_id3_tag(tags, "TYER", "")
+            if not year:
+                year = self.get_id3_tag(tags, "TDRC", "")
 
             album_art = None
             for tag in tags.values():
@@ -198,6 +201,7 @@ class MP3ToVideoConverter:
             album_artist, _ = self.detect_encoding(album_artist)
             album, _ = self.detect_encoding(album)
             genre, _ = self.detect_encoding(genre)
+            year, _ = self.detect_encoding(year)
 
             if lyrics:
                 lyrics, _ = self.detect_encoding(lyrics)
@@ -208,6 +212,7 @@ class MP3ToVideoConverter:
                 'album_artist': album_artist,
                 'album': album,
                 'genre': genre,
+                'year': year,
                 'duration': audio.info.length,
                 'album_art': album_art,
                 'lyrics': lyrics,
@@ -499,6 +504,7 @@ class MP3ToVideoConverter:
             artist_text = metadata['artist'][:50]
             album_text = metadata['album'][:50]
             genre_text = metadata.get('genre', '')
+            year =  metadata.get('year', '')
             
             # Calculate text positions (below album art)
             text_start_y = 520  # Below album art (80 + 400 + 40)
@@ -525,11 +531,17 @@ class MP3ToVideoConverter:
                                          info_font, fill=(255, 255, 255),
                                          outline=text_outline, outline_width=2)
 
-            # Draw album and genre info
-            info_text = f"{album_text}" if album_text else ""
+            # Draw album, genre and year info
+            info_parts = []
+            if album_text:
+                info_parts.append(album_text)
             if genre_text:
-                info_text += f" | {genre_text}" if info_text else f"{genre_text}"
+                info_parts.append(genre_text)
+            if year:
+                info_parts.append(year)
             
+            info_text = " | ".join(info_parts)
+
             if info_text:
                 if hasattr(draw, 'textbbox'):
                     info_bbox = draw.textbbox((0, 0), info_text, font=list_font)
