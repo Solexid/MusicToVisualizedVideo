@@ -5,7 +5,7 @@ Uses Tkinter for the user interface.
 """
 
 import tkinter as tk
-from tkinter import ttk, filedialog, messagebox, scrolledtext, font
+from tkinter import ttk, filedialog, messagebox, scrolledtext, font, simpledialog
 import threading
 import os
 from pathlib import Path
@@ -285,6 +285,15 @@ class ConverterGUI:
         ttk.Checkbutton(settings_frame, text="🔀 Shuffle tracks", variable=self.shuffle_var, style='Settings.TCheckbutton').grid(row=s_row, column=1, sticky="w", padx=5)
         s_row += 1
 
+        ttk.Label(settings_frame, text="Background:", style='Settings.TLabel').grid(row=s_row, column=0, sticky="e", pady=4, padx=(0, 10))
+        bg_frame = ttk.Frame(settings_frame, style='Settings.TFrame')
+        bg_frame.grid(row=s_row, column=1, sticky="ew")
+        bg_frame.columnconfigure(0, weight=1)
+        self.background_var = tk.StringVar()
+        ttk.Entry(bg_frame, textvariable=self.background_var, width=15, font=('Segoe UI', 9)).grid(row=0, column=0, sticky="ew", padx=(0, 5))
+        ttk.Button(bg_frame, text="Browse...", command=self._browse_background, width=8).grid(row=0, column=1)
+        s_row += 1
+
         # Separator before visual settings
         ttk.Separator(settings_frame, orient='horizontal').grid(row=s_row, column=0, columnspan=2, sticky="ew", pady=8)
         s_row += 1
@@ -369,6 +378,31 @@ class ConverterGUI:
         )
         if filepath:
             self.font_var.set(filepath)
+    
+    def _browse_background(self):
+        """Browse for background image or enter hex color."""
+        # Show dialog to choose image or color
+        result = messagebox.askyesnocancel(
+            "Background Type",
+            "Use image file as background?\n\nYes - Select image file\nNo - Enter hex color\nCancel - Use album art"
+        )
+        
+        if result is True:  # Yes - select image
+            filepath = filedialog.askopenfilename(
+                title="Select Background Image",
+                filetypes=[("Image files", "*.png *.jpg *.jpeg *.bmp *.gif"), ("All files", "*.*")]
+            )
+            if filepath:
+                self.background_var.set(filepath)
+        elif result is False:  # No - enter color
+            color = simpledialog.askstring(
+                "Background Color",
+                "Enter hex color (e.g., #1a1a2e or 0x1a1a2e):",
+                initialvalue="#1a1a2e"
+            )
+            if color:
+                self.background_var.set(color)
+        # Cancel - leave empty (use album art)
     
     def _on_vis_type_changed(self, event=None):
         """Handle visualization type selection change."""
@@ -473,7 +507,8 @@ class ConverterGUI:
                 shuffle=1 if self.shuffle_var.get() else 0,
                 progress_callback=self._update_progress,
                 log_callback=self._log,
-                use_tqdm=False
+                use_tqdm=False,
+                background=self.background_var.get() if self.background_var.get() else None
             )
             
             self.converter.process_all()

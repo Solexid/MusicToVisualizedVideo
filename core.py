@@ -23,10 +23,10 @@ class MP3ToVideoConverter:
     def __init__(self, input_folder, output_folder, batch_size=25, arate=192, vrate=550,
                  font='arial.ttf', shuffle=0, frate=30, codec='libx264', vis_type=0,
                  test=False, wavecolor=None, wavecolor2=None, afreq=44100,
-                 progress_callback=None, log_callback=None, use_tqdm=True):
+                 progress_callback=None, log_callback=None, use_tqdm=True, background=None):
         """
         Initialize the converter.
-        
+
         Args:
             input_folder: Path to folder with MP3 files
             output_folder: Path to folder for output videos
@@ -45,6 +45,7 @@ class MP3ToVideoConverter:
             progress_callback: Optional callback for progress updates (current, total, message)
             log_callback: Optional callback for log messages
             use_tqdm: Use tqdm progress bar in CLI (default: True)
+            background: Background image path or hex color (None = use album art)
         """
         self.input_folder = Path(input_folder)
         self.output_folder = Path(output_folder)
@@ -63,6 +64,7 @@ class MP3ToVideoConverter:
             self.test_duration = test
         self.afreq = afreq
         self.processed_files = []
+        self.background = background  # None = album art, path = image, hex = color
         self.to_process_files = []
         self.use_tqdm = use_tqdm and not progress_callback  # Don't use tqdm if GUI callback is provided
         
@@ -324,9 +326,7 @@ class MP3ToVideoConverter:
     def _get_font(self, font_path, size, bold=False):
         """Get font with optional bold weight."""
         try:
-            # Try loading as bold first (append 'b' to filename or use bold variant)
             if bold:
-                # Try common bold font patterns
                 bold_variants = [
                     font_path.replace('.ttf', 'b.ttf'),
                     font_path.replace('.ttf', 'Bd.ttf'),
@@ -339,16 +339,49 @@ class MP3ToVideoConverter:
                             return ImageFont.truetype(bold_path, size)
                         except:
                             pass
-                
-                # Try loading with weight parameter (PIL 10+)
                 try:
                     return ImageFont.truetype(font_path, size, weight='bold')
                 except TypeError:
                     pass
-            
             return ImageFont.truetype(font_path, size)
         except:
             return ImageFont.load_default()
+
+    def _create_blurred_background(self, source_image_path, width=1920, height=1080):
+        """Create blurred, scaled, and darkened background from image."""
+        from PIL import ImageFilter
+        
+        source = Image.open(source_image_path)
+        
+        # Scale to fill width, maintaining aspect ratio
+        source_ratio = source.width / source.height
+        target_ratio = width / height
+        
+        if source_ratio > target_ratio:
+            # Image is wider - scale to height
+            new_height = height
+            new_width = int(new_height * source_ratio)
+        else:
+            # Image is taller - scale to width
+            new_width = width
+            new_height = int(new_width / source_ratio)
+        
+        source = source.resize((new_width, new_height), Image.LANCZOS)
+        
+        # Crop to center
+        left = (new_width - width) // 2
+        top = (new_height - height) // 2
+        source = source.crop((left, top, left + width, top + height))
+        
+        # Apply blur
+        source = source.filter(ImageFilter.GaussianBlur(radius=30))
+        
+        # Darken by 40%
+        from PIL import ImageEnhance
+        enhancer = ImageEnhance.Brightness(source)
+        source = enhancer.enhance(0.6)
+        
+        return source.convert('RGB')
 
     def _draw_text_with_outline(self, draw, position, text, font, fill, outline=None, outline_width=2):
         """Draw text with optional outline (shadow effect)."""
@@ -366,7 +399,38 @@ class MP3ToVideoConverter:
                                 track_list_file=None, current_track_index=0):
         """Create background image with track info and track list (without lyrics)."""
         width, height = 1920, 1080
-        image = Image.new('RGB', (width, height), color=(0, 0, 0))
+        
+        # Determine background color or image
+        bg_color = (0, 0, 0)
+        bg_image = None
+        
+        if self.background:
+            # Check if it's a hex color
+            if self.background.startswith('#') or self.background.startswith('0x'):
+                try:
+                    hex_color = self.background.replace('#', '').replace('0x', '')
+                    if len(hex_color) == 6:
+                        bg_color = tuple(int(hex_color[i:i+2], 16) for i in (0, 2, 4))
+                except:
+                    bg_color = (0, 0, 0)
+            elif Path(self.background).exists():
+                # It's an image path
+                bg_image = self._create_blurred_background(self.background)
+        
+        # If no background image or color specified, use album art as blurred background
+        if bg_image is None and not self.background:
+            if album_art_path and Path(album_art_path).exists():
+                bg_image = self._create_blurred_background(album_art_path)
+        
+        # Create image
+        if bg_image:
+            image = bg_image.copy()
+            # Add semi-transparent dark overlay for better text readability
+            overlay = Image.new('RGBA', image.size, (0, 0, 0, 80))
+            image = Image.alpha_composite(image.convert('RGBA'), overlay).convert('RGB')
+        else:
+            image = Image.new('RGB', (width, height), color=bg_color)
+        
         draw = ImageDraw.Draw(image)
 
         try:
@@ -407,9 +471,25 @@ class MP3ToVideoConverter:
                 album_art = Image.open(album_art_path)
                 art_size = 400
                 album_art = album_art.resize((art_size, art_size), Image.LANCZOS)
+                
+                # Apply rounded corners mask
+                radius = 20
+                mask = Image.new('L', (art_size, art_size), 0)
+                mask_draw = ImageDraw.Draw(mask)
+                mask_draw.rounded_rectangle([0, 0, art_size - 1, art_size - 1], radius=radius, fill=255)
+                
+                # Apply mask to album art
+                album_art_rounded = Image.new('RGBA', (art_size, art_size), (0, 0, 0, 0))
+                album_art_rounded.paste(album_art.convert('RGBA'), (0, 0), mask)
+                
+                # Convert main image to RGBA for compositing
+                image_rgba = image.convert('RGBA')
                 art_x = (width - art_size) // 2
                 art_y = 100
-                image.paste(album_art, (art_x, art_y))
+                
+                # Paste with alpha
+                image_rgba.paste(album_art_rounded, (art_x, art_y), album_art_rounded)
+                image = image_rgba
             
             title_text = metadata['title'][:50]
             artist_text = f"{metadata['album_artist']} - {metadata['album']}"[:70]
@@ -437,6 +517,8 @@ class MP3ToVideoConverter:
                                          info_font, fill=(200, 200, 200),
                                          outline=text_outline, outline_width=2)
             
+            # Convert back to RGB for saving
+            image = image.convert('RGB')
             image.save(output_path)
             return True
         

@@ -54,6 +54,8 @@ def main():
                         help='Wave color in hex or from ffmpeg color table (default: album art dominant color)')
     parser.add_argument('--wavecolor2',
                         help='Secondary wave color in hex or from ffmpeg color table (default: 0x9400D3)')
+    parser.add_argument('--background',
+                        help='Background image path or hex color (default: blurred album art)')
     
     args = parser.parse_args()
     
@@ -77,7 +79,8 @@ def main():
         wavecolor=args.wavecolor,
         wavecolor2=args.wavecolor2,
         afreq=args.afreq,
-        use_tqdm=True
+        use_tqdm=True,
+        background=args.background
     )
     
     try:
