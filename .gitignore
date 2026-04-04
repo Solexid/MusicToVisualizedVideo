@@ -27,8 +27,14 @@ wheels/
 
 # PyInstaller
 #  - https://pyinstaller.readthedocs.io/en/latest/usage.html#cmdoption-onefile
+*.spec
 *.exe
 *.exe.manifest
+
+# Release artifacts
+release_*/
+MusicToVisualizedVideo_*.zip
+ffmpeg.zip
 
 # Installer logs
 pip-log.txt
@@ -53,7 +59,9 @@ coverage.xml
 
 # VS Code
 .vscode/
+.qwen/
 
 # OS generated files
 .DS_Store
 Thumbs.db
+desktop.ini

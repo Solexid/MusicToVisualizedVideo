@@ -251,6 +251,15 @@ class ConverterGUI:
         ttk.Spinbox(settings_frame, from_=1, to=50, width=10, textvariable=self.batch_size_var, font=('Segoe UI', 9)).grid(row=s_row, column=1, sticky="w", padx=5)
         s_row += 1
 
+        ttk.Label(settings_frame, text="Font:", style='Settings.TLabel').grid(row=s_row, column=0, sticky="e", pady=4, padx=(0, 10))
+        font_frame = ttk.Frame(settings_frame, style='Settings.TFrame')
+        font_frame.grid(row=s_row, column=1, sticky="ew")
+        font_frame.columnconfigure(0, weight=1)
+        self.font_var = tk.StringVar(value='arial.ttf')
+        ttk.Entry(font_frame, textvariable=self.font_var, width=15, font=('Segoe UI', 9)).grid(row=0, column=0, sticky="ew", padx=(0, 5))
+        ttk.Button(font_frame, text="Browse...", command=self._browse_font, width=8).grid(row=0, column=1)
+        s_row += 1
+
         ttk.Label(settings_frame, text="Video kbps:", style='Settings.TLabel').grid(row=s_row, column=0, sticky="e", pady=4, padx=(0, 10))
         self.vrate_var = tk.IntVar(value=550)
         ttk.Spinbox(settings_frame, from_=100, to=5000, width=10, textvariable=self.vrate_var, font=('Segoe UI', 9)).grid(row=s_row, column=1, sticky="w", padx=5)
@@ -352,6 +361,15 @@ class ConverterGUI:
         else:
             self.test_duration_spinbox.config(state="disabled")
     
+    def _browse_font(self):
+        """Browse for font file."""
+        filepath = filedialog.askopenfilename(
+            title="Select Font File",
+            filetypes=[("Font files", "*.ttf *.otf *.ttc"), ("All files", "*.*")]
+        )
+        if filepath:
+            self.font_var.set(filepath)
+    
     def _on_vis_type_changed(self, event=None):
         """Handle visualization type selection change."""
         selected_index = self.vis_combo.current()
@@ -445,6 +463,7 @@ class ConverterGUI:
                 batch_size=self.batch_size_var.get(),
                 arate=self.arate_var.get(),
                 vrate=self.vrate_var.get(),
+                font=self.font_var.get(),
                 frate=self.frate_var.get(),
                 codec=self.codec_var.get(),
                 vis_type=self.vis_type_var.get(),
