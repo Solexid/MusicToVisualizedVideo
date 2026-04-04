@@ -261,18 +261,18 @@ class ConverterGUI:
         s_row += 1
 
         ttk.Label(settings_frame, text="Video kbps:", style='Settings.TLabel').grid(row=s_row, column=0, sticky="e", pady=4, padx=(0, 10))
-        self.vrate_var = tk.IntVar(value=550)
-        ttk.Spinbox(settings_frame, from_=100, to=5000, width=10, textvariable=self.vrate_var, font=('Segoe UI', 9)).grid(row=s_row, column=1, sticky="w", padx=5)
+        self.vrate_var = tk.IntVar(value= 1550)
+        ttk.Spinbox(settings_frame, from_=550, to=9000, width=10, textvariable=self.vrate_var, font=('Segoe UI', 9)).grid(row=s_row, column=1, sticky="w", padx=5)
         s_row += 1
 
         ttk.Label(settings_frame, text="Audio kbps:", style='Settings.TLabel').grid(row=s_row, column=0, sticky="e", pady=4, padx=(0, 10))
-        self.arate_var = tk.IntVar(value=192)
+        self.arate_var = tk.IntVar(value=256)
         ttk.Spinbox(settings_frame, from_=64, to=512, width=10, textvariable=self.arate_var, font=('Segoe UI', 9)).grid(row=s_row, column=1, sticky="w", padx=5)
         s_row += 1
 
         ttk.Label(settings_frame, text="FPS:", style='Settings.TLabel').grid(row=s_row, column=0, sticky="e", pady=4, padx=(0, 10))
-        self.frate_var = tk.IntVar(value=30)
-        ttk.Spinbox(settings_frame, from_=15, to=60, width=10, textvariable=self.frate_var, font=('Segoe UI', 9)).grid(row=s_row, column=1, sticky="w", padx=5)
+        self.frate_var = tk.IntVar(value=60)
+        ttk.Spinbox(settings_frame, from_=15, to=144, width=10, textvariable=self.frate_var, font=('Segoe UI', 9)).grid(row=s_row, column=1, sticky="w", padx=5)
         s_row += 1
 
         ttk.Label(settings_frame, text="Codec:", style='Settings.TLabel').grid(row=s_row, column=0, sticky="e", pady=4, padx=(0, 10))
@@ -426,7 +426,9 @@ class ConverterGUI:
     def _load_settings(self):
         """Load default settings or from config."""
         default_out = Path.cwd() / "out"
+        default_in = Path.cwd() 
         default_out.mkdir(exist_ok=True)
+        self.input_var.set(str(default_in))
         self.output_var.set(str(default_out))
     
     def _log(self, message):
