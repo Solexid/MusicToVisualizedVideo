@@ -534,7 +534,7 @@ class MP3ToVideoConverter:
         draw.text((x, y), text, font=font, fill=fill)
 
     def create_background_image(self, metadata, output_path, album_art_path=None,
-                                track_list_file=None, current_track_index=0):
+                                track_list_file=None, current_track_index=0, vis_type=0):
         """Create background image with track info and track list (without lyrics)."""
         width, height = 1920, 1080
         
@@ -611,22 +611,28 @@ class MP3ToVideoConverter:
                 album_art = Image.open(album_art_path)
                 art_size = 400
                 album_art = album_art.resize((art_size, art_size), Image.LANCZOS)
-                
+
                 # Apply rounded corners mask
                 radius = 20
                 mask = Image.new('L', (art_size, art_size), 0)
                 mask_draw = ImageDraw.Draw(mask)
                 mask_draw.rounded_rectangle([0, 0, art_size - 1, art_size - 1], radius=radius, fill=255)
-                
+
                 # Apply mask to album art
                 album_art_rounded = Image.new('RGBA', (art_size, art_size), (0, 0, 0, 0))
                 album_art_rounded.paste(album_art.convert('RGBA'), (0, 0), mask)
-                
+
                 # Convert main image to RGBA for compositing
                 image_rgba = image.convert('RGBA')
                 art_x = (width - art_size) // 2
-                art_y = 80
                 
+                # For bottom visualization (type 2) and top/bottom (type 3), center the block
+                # For others, keep at top to avoid overlap with side visualizations
+                if vis_type in (2, 3):
+                    art_y = 240  # Lower centered, less empty space at bottom
+                else:
+                    art_y = 80
+
                 # Paste with alpha
                 image_rgba.paste(album_art_rounded, (art_x, art_y), album_art_rounded)
                 image = image_rgba
@@ -637,9 +643,12 @@ class MP3ToVideoConverter:
             album_text = metadata['album'][:50]
             genre_text = metadata.get('genre', '')
             year =  metadata.get('year', '')
-            
+
             # Calculate text positions (below album art)
-            text_start_y = 520  # Below album art (80 + 400 + 40)
+            if vis_type in (2, 3):
+                text_start_y = 680  # Below lowered album art
+            else:
+                text_start_y = 520  # Below top album art
 
             # Draw title (largest, centered)
             if hasattr(draw, 'textbbox'):
@@ -852,7 +861,8 @@ class MP3ToVideoConverter:
                 self.create_background_image(
                     metadata, bg_image_path,
                     album_art_path if album_art_path else None,
-                    track_list_file, i
+                    track_list_file, i,
+                    vis_type=self.vis_type
                 )
 
                 self._check_stop()
