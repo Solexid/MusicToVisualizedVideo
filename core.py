@@ -491,16 +491,46 @@ class MP3ToVideoConverter:
         
         return source.convert('RGB')
 
-    def _draw_text_with_outline(self, draw, position, text, font, fill, outline=None, outline_width=2):
-        """Draw text with optional outline (shadow effect)."""
+    def _get_text_contrast_color(self, image, text_area):
+        """Analyze background brightness and return contrasting text color (white or black)."""
+        x, y, w, h = text_area
+        # Crop area and ensure bounds
+        crop = image.crop((max(0, x), max(0, y), 
+                          min(image.width, x + w), min(image.height, y + h)))
+        
+        # Convert to grayscale and calculate average brightness
+        gray = crop.convert('L')
+        avg_brightness = sum(gray.getdata()) / (gray.width * gray.height)
+        
+        # Return white for dark backgrounds, black for light backgrounds
+        if avg_brightness < 128:
+            return (255, 255, 255)  # White text
+        else:
+            return (0, 0, 0)  # Black text
+
+    def _draw_text_with_outline(self, draw, position, text, font, fill, outline_width=3):
+        """Draw text with external outline that doesn't overwrite the fill color."""
         x, y = position
-        if outline:
-            # Draw outline by drawing text at offsets around the center
-            for dx in range(-outline_width, outline_width + 1):
-                for dy in range(-outline_width, outline_width + 1):
-                    if dx != 0 or dy != 0:
-                        draw.text((x + dx, y + dy), text, font=font, fill=outline)
-        # Draw main text
+        
+        # Determine outline color (opposite of fill for contrast)
+        if fill == (255, 255, 255) or fill[0] > 128:
+            outline_color = (0, 0, 0)  # Black outline for white/light text
+        else:
+            outline_color = (255, 255, 255)  # White outline for black/dark text
+        
+        # Draw outline pixels only (outer ring)
+        outline_positions = []
+        for dx in range(-outline_width, outline_width + 1):
+            for dy in range(-outline_width, outline_width + 1):
+                # Only include pixels on the outer edge (not the inner square)
+                if abs(dx) == outline_width or abs(dy) == outline_width:
+                    outline_positions.append((x + dx, y + dy))
+        
+        # Draw outline
+        for ox, oy in outline_positions:
+            draw.text((ox, oy), text, font=font, fill=outline_color)
+        
+        # Draw main text on top
         draw.text((x, y), text, font=font, fill=fill)
 
     def create_background_image(self, metadata, output_path, album_art_path=None,
@@ -553,8 +583,9 @@ class MP3ToVideoConverter:
                 list_font = ImageFont.load_default()
                 highlight_font = ImageFont.load_default()
 
-            # Outline color for text
-            text_outline = (55, 55, 55)  # Black outline
+            # Determine text contrast color based on background brightness in text area
+            text_area = (50, 520, width - 100, height - 520)  # Approximate text region
+            text_fill = self._get_text_contrast_color(image, text_area)
 
             if track_list_file and track_list_file.exists():
                 with open(track_list_file, 'r', encoding='utf-8') as f:
@@ -565,14 +596,15 @@ class MP3ToVideoConverter:
                 for i, track in enumerate(tracks):
                     track_text = track.strip()
                     if i == current_track_index:
-                        # Highlight current track with larger font and outline
-                        self._draw_text_with_outline(draw, (list_x, list_y), track_text, 
-                                                     highlight_font, fill=(255, 255, 0), 
-                                                     outline=text_outline, outline_width=2)
-                    else:
+                        # Highlight current track with larger font and bright yellow
                         self._draw_text_with_outline(draw, (list_x, list_y), track_text,
-                                                     list_font, fill=(150, 150, 150),
-                                                     outline=text_outline, outline_width=1)
+                                                     highlight_font, fill=(255, 255, 0),
+                                                     outline_width=2)
+                    else:
+                        # Use contrast color for regular tracks
+                        self._draw_text_with_outline(draw, (list_x, list_y), track_text,
+                                                     list_font, fill=text_fill,
+                                                     outline_width=1)
                     list_y += 30
             
             if album_art_path and album_art_path.exists():
@@ -617,8 +649,8 @@ class MP3ToVideoConverter:
                 title_width = draw.textlength(title_text, font=title_font)
             title_x = (width - title_width) // 2
             self._draw_text_with_outline(draw, (title_x, text_start_y), title_text,
-                                         title_font, fill=(255, 255, 255),
-                                         outline=text_outline, outline_width=3)
+                                         title_font, fill=text_fill,
+                                         outline_width=3)
 
             # Draw artist name
             if hasattr(draw, 'textbbox'):
@@ -628,8 +660,8 @@ class MP3ToVideoConverter:
                 artist_width = draw.textlength(artist_text, font=info_font)
             artist_x = (width - artist_width) // 2
             self._draw_text_with_outline(draw, (artist_x, text_start_y + 50), artist_text,
-                                         info_font, fill=(255, 255, 255),
-                                         outline=text_outline, outline_width=2)
+                                         info_font, fill=text_fill,
+                                         outline_width=2)
 
             # Draw album, genre and year info
             info_parts = []
@@ -639,7 +671,7 @@ class MP3ToVideoConverter:
                 info_parts.append(genre_text)
             if year:
                 info_parts.append(year)
-            
+
             info_text = " | ".join(info_parts)
 
             if info_text:
@@ -650,8 +682,8 @@ class MP3ToVideoConverter:
                     info_width = draw.textlength(info_text, font=list_font)
                 info_x = (width - info_width) // 2
                 self._draw_text_with_outline(draw, (info_x, text_start_y + 95), info_text,
-                                             list_font, fill=(180, 180, 180),
-                                             outline=text_outline, outline_width=1)
+                                             list_font, fill=text_fill,
+                                             outline_width=2)
             
             # Convert back to RGB for saving
             image = image.convert('RGB')
