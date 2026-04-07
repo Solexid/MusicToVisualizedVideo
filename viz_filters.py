@@ -3,6 +3,21 @@ Visualization filters for Music To Visualized Video converter.
 Contains audio visualization filter generation and video creation with visualizations.
 """
 
+import sys
+from pathlib import Path
+
+
+def _resolve_shader(name):
+    """Resolve shader path: working dir first, then PyInstaller bundle."""
+    local = Path(name)
+    if local.exists():
+        return str(local)
+    if getattr(sys, 'frozen', False) and hasattr(sys, '_MEIPASS'):
+        bundled = Path(sys._MEIPASS) / name
+        if bundled.exists():
+            return str(bundled)
+    return str(local)  # fallback, let ffmpeg handle the error
+
 
 class VisualizationFilters:
     """Handles audio visualization filter creation and video segment generation."""
@@ -10,7 +25,7 @@ class VisualizationFilters:
     def __init__(self, vis_type=0, frate=30, afreq=44100, wavecolor="0xFEFEFE", wavecolor2="0x9400D3"):
         """
         Initialize visualization filters.
-        
+
         Args:
             vis_type: Visualization type (0-5)
             frate: Video framerate
@@ -44,13 +59,13 @@ class VisualizationFilters:
                 # Alternative visualization without geq
                 (
                     f"[{audio_index}:a]aformat=sample_fmts=fltp:sample_rates={self.afreq}:channel_layouts=stereo,"
-                    f"showwaves=mode=cline:draw=full:s=240x240:colors={self.wavecolor2}|{self.wavecolor}:rate={str(self.frate)},"
-                    f"scale=480:480:flags=fast_bilinear[auvis]"
+                    f"showwaves=mode=cline:draw=full:s=480x480:colors={self.wavecolor2}|{self.wavecolor}:rate={str(self.frate)},"
+                    f"format=rgba[auvis]"
                 ),
                 "[0:v][auvis]overlay=x=720:y=600[outv]"
             ),
             2: (
-                # Full-width bottom visualization (10% height)
+                # Full-width bottom visualization (40% height)
                 (
                     f"[{audio_index}:a]aformat=sample_fmts=fltp:sample_rates={self.afreq}:channel_layouts=stereo,"
                     f"showwaves=mode=cline:draw=full:s=720x108:colors={self.wavecolor2}|{self.wavecolor}:rate={str(self.frate)},"
@@ -86,21 +101,19 @@ class VisualizationFilters:
                 # Circular projection visualization using GLSL shader
                 (
                     f"[{audio_index}:a]aformat=sample_fmts=fltp:sample_rates={self.afreq}:channel_layouts=stereo,"
-                    f"showwaves=mode=cline:draw=full:s=120x120:colors={self.wavecolor2}|{self.wavecolor}:split_channels=1:rate={str(self.frate)},"
-                    f"scale=480:480:flags=fast_bilinear[wave],"
-                    f"[wave]libplacebo=custom_shader_path=circle.glsl[auvis]"
+                    f"showwaves=mode=cline:draw=full:s=480x480:colors={self.wavecolor2}|{self.wavecolor}:split_channels=1:rate={str(self.frate)},"
+                    f"libplacebo=custom_shader_path={_resolve_shader('circle.glsl')}[auvis]"
                 ),
                 "[0:v][auvis]overlay=x=720:y=600[outv]"
             ),
         }
 
-        # Default configuration (vis_type 0) - Original visualization with geq
+        # Default configuration (vis_type 0) - GPU-accelerated circular projection via libplacebo
         default_config = (
             (
                 f"[{audio_index}:a]aformat=sample_fmts=fltp:sample_rates={self.afreq}:channel_layouts=stereo,"
-                f"showwaves=mode=cline:draw=full:s=240x240:colors={self.wavecolor2}|{self.wavecolor}:split_channels=1:rate={str(self.frate)},"
-                f"geq='p(mod(W/PI*(PI+atan2(H/2-Y,X-W/2)),W), H-2*hypot(H/2-Y,X-W/2))':"
-                f"a='alpha(mod(W/PI*(PI+atan2(H/2-Y,X-W/2)),W), H-2*hypot(H/2-Y,X-W/2))',scale=480:480:flags=fast_bilinear[auvis]"
+                f"showwaves=mode=cline:draw=full:s=480x480:colors={self.wavecolor2}|{self.wavecolor}:split_channels=1:rate={str(self.frate)},"
+                f"libplacebo=custom_shader_path={_resolve_shader('polar.glsl')}[auvis]"
             ),
             "[0:v][auvis]overlay=x=720:y=600[outv]"
         )

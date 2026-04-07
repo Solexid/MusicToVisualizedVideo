@@ -52,6 +52,8 @@ pyinstaller ^
     --add-data "viz_filters.py;." ^
     --add-data "core.py;." ^
     --add-data "gui.py;." ^
+    --add-data "circle.glsl;." ^
+    --add-data "polar.glsl;." ^
     --hidden-import pkg_resources ^
     --hidden-import mutagen ^
     --hidden-import PIL ^

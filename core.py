@@ -330,9 +330,22 @@ class MP3ToVideoConverter:
 
             img = Image.open(output_path)
             resized_img = img.resize((1, 1), Image.BICUBIC)
-            r, g, b = resized_img.convert('RGB').getpixel((0, 0))
+            bg_r, bg_g, bg_b = resized_img.convert('RGB').getpixel((0, 0))
             if self.is_wavecolor_generate:
-                self.wavecolor = f"0x{r:02x}{g:02x}{b:02x}"
+                # Push wavecolor 30% toward white or black relative to bg
+                luminance = 0.299 * bg_r + 0.587 * bg_g + 0.114 * bg_b
+                if luminance < 128:
+                    # Dark bg → push toward white
+                    wave_r = min(255, bg_r + int((255 - bg_r) * 0.3))
+                    wave_g = min(255, bg_g + int((255 - bg_g) * 0.3))
+                    wave_b = min(255, bg_b + int((255 - bg_b) * 0.3))
+                else:
+                    # Light bg → push toward black
+                    wave_r = max(0, bg_r - int(bg_r * 0.3))
+                    wave_g = max(0, bg_g - int(bg_g * 0.3))
+                    wave_b = max(0, bg_b - int(bg_b * 0.3))
+                self.wavecolor = f"0x{wave_r:02x}{wave_g:02x}{wave_b:02x}"
+                self.viz_filters.wavecolor = self.wavecolor
             img = img.resize(size, Image.LANCZOS)
             img.save(output_path, 'JPEG', quality=95)
             return True
