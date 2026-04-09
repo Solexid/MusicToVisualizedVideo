@@ -39,7 +39,7 @@ if not exist "requirements.txt" (
         echo       Installing dependencies...
         echo.
         python -m pip install --upgrade pip --quiet
-        pip install -r requirements.txt --quiet
+        python -m pip install -r requirements.txt --quiet
         if %errorlevel% neq 0 (
             echo.
             echo [ERROR] Failed to install dependencies!

@@ -33,7 +33,7 @@ echo [3/5] Checking PyInstaller...
 python -c "import PyInstaller" >nul 2>&1
 if %errorlevel% neq 0 (
     echo       Installing PyInstaller...
-    pip install pyinstaller --quiet
+    python -m pip install pyinstaller --quiet
 ) else (
     echo       PyInstaller already installed
 )
